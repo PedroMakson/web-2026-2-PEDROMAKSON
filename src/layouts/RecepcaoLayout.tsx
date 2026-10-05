@@ -46,7 +46,6 @@ export default function RecepcaoLayout() {
     <AppShell
       menuItems={RECEPCAO_MENU}
       roleLabel="Recepcionista"
-      user={{ nome: "Júlia Alves", iniciais: "JA" }}
       notifications={NOTIFICACOES_RECEPCAO}
       notifFooter="Alertas operacionais do perfil Recepcionista, gerados pelo job diário (RF22–RF24)."
     >

@@ -74,7 +74,6 @@ export default function AdminLayout() {
     <AppShell
       menuItems={ADMIN_MENU}
       roleLabel="Administrador"
-      user={{ nome: "Walber Silva", iniciais: "WS" }}
       notifications={NOTIFICACOES_ADMIN}
       notifFooter="Alertas operacionais do perfil Administrador, gerados pelo job diário (RF22–RF24)."
     >

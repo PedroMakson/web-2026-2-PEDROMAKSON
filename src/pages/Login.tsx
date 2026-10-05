@@ -1,20 +1,39 @@
 import { type FormEvent, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, Navigate, useNavigate } from "react-router-dom";
+import { useAuth } from "../auth/AuthContext";
+import { HOME_POR_PERFIL } from "../auth/perfis";
 
-const PERFIS_DEMO = [
-  { nome: "Aluno", desc: "Pedro Makson", to: "/aluno" },
-  { nome: "Instrutor", desc: "Carla Menezes", to: "/instrutor" },
-  { nome: "Recepção", desc: "Júlia Alves", to: "/recepcao" },
-  { nome: "Admin", desc: "Walber Silva", to: "/admin" },
-];
+function mensagemDeErro(error: unknown) {
+  const nome = error instanceof Error ? error.name : "";
+  const texto = error instanceof Error ? error.message : "";
+  if (/disabled/i.test(texto)) {
+    return "Conta bloqueada. Procure o administrador.";
+  }
+  if (nome === "NotAuthorizedException" || nome === "UserNotFoundException") {
+    return "E-mail ou senha incorretos.";
+  }
+  if (nome === "NetworkError") {
+    return "Sem conexão com o servidor de login. Tente novamente.";
+  }
+  if (nome === "LimitExceededException" || nome === "TooManyRequestsException") {
+    return "Muitas tentativas. Aguarde alguns minutos.";
+  }
+  return texto || "Não foi possível entrar. Tente novamente.";
+}
 
 export default function Login() {
   const navigate = useNavigate();
-  const [email, setEmail] = useState("pedro@email.com");
-  const [senha, setSenha] = useState("gymflow");
+  const { user, loading, entrar } = useAuth();
+  const [email, setEmail] = useState("");
+  const [senha, setSenha] = useState("");
   const [erro, setErro] = useState("");
+  const [enviando, setEnviando] = useState(false);
 
-  function handleSubmit(event: FormEvent) {
+  if (!loading && user) {
+    return <Navigate to={HOME_POR_PERFIL[user.perfil]} replace />;
+  }
+
+  async function handleSubmit(event: FormEvent) {
     event.preventDefault();
 
     if (!email || !senha) {
@@ -23,8 +42,15 @@ export default function Login() {
     }
 
     setErro("");
-    // TODO: chamar a API de autenticação (Cognito) quando o backend existir.
-    navigate("/aluno");
+    setEnviando(true);
+    try {
+      const logado = await entrar(email.trim(), senha);
+      navigate(HOME_POR_PERFIL[logado.perfil]);
+    } catch (error) {
+      setErro(mensagemDeErro(error));
+    } finally {
+      setEnviando(false);
+    }
   }
 
   return (
@@ -103,34 +129,12 @@ export default function Login() {
 
             <button
               type="submit"
-              className="mt-1 rounded-[10px] bg-navy py-3 text-sm font-bold text-white transition hover:bg-[#24395f]"
+              disabled={enviando}
+              className="mt-1 rounded-[10px] bg-navy py-3 text-sm font-bold text-white transition hover:bg-[#24395f] disabled:cursor-not-allowed disabled:opacity-60"
             >
-              Entrar
+              {enviando ? "Entrando…" : "Entrar"}
             </button>
           </form>
-
-          <div className="mt-6 border-t border-navy/10 pt-4">
-            <p className="mb-2.5 text-[11px] font-bold uppercase tracking-wider text-navy/45">
-              Entrar como (demonstração)
-            </p>
-            <div className="grid grid-cols-2 gap-2">
-              {PERFIS_DEMO.map((perfil) => (
-                <button
-                  key={perfil.nome}
-                  type="button"
-                  onClick={() => navigate(perfil.to)}
-                  className="rounded-xl border border-navy/15 bg-white px-3 py-2.5 text-left transition hover:border-teal hover:bg-teal/5"
-                >
-                  <div className="text-[13px] font-bold text-navy">
-                    {perfil.nome}
-                  </div>
-                  <div className="mt-0.5 text-[11px] text-navy/50">
-                    {perfil.desc}
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
         </div>
       </div>
     </div>

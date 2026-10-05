@@ -51,7 +51,6 @@ export default function AlunoLayout() {
     <AppShell
       menuItems={ALUNO_MENU}
       roleLabel="Aluno"
-      user={{ nome: "Pedro Makson", iniciais: "PM" }}
       notifications={NOTIFICACOES_ALUNO}
       notifFooter="Disparadas pelo job diário de notificações (RF22–RF24)."
     >

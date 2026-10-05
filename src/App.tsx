@@ -1,6 +1,8 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { ToastProvider } from "./components/Toast";
 import { StoreProvider } from "./data/store";
+import { AuthProvider, useAuth } from "./auth/AuthContext";
+import RequireRole from "./auth/RequireRole";
 import Login from "./pages/Login";
 import RecuperarSenha from "./pages/RecuperarSenha";
 import AlunoLayout from "./layouts/AlunoLayout";
@@ -26,16 +28,33 @@ import AdminUsuarios from "./pages/AdminUsuarios";
 import AdminPlanos from "./pages/AdminPlanos";
 import AdminRelatorios from "./pages/AdminRelatorios";
 
+function MeusAlunos() {
+  const { user } = useAuth();
+  return (
+    <InstrutorAlunos
+      instrutorFiltro={user?.perfil === "Instrutor" ? user.nome : undefined}
+    />
+  );
+}
+
 export default function App() {
   return (
     <ToastProvider>
+      <AuthProvider>
       <StoreProvider>
         <Routes>
           <Route path="/" element={<Navigate to="/login" replace />} />
           <Route path="/login" element={<Login />} />
           <Route path="/recuperar-senha" element={<RecuperarSenha />} />
 
-          <Route path="/aluno" element={<AlunoLayout />}>
+          <Route
+            path="/aluno"
+            element={
+              <RequireRole perfis={["Aluno"]}>
+                <AlunoLayout />
+              </RequireRole>
+            }
+          >
             <Route index element={<AlunoHome />} />
             <Route path="treino" element={<AlunoTreino />} />
             <Route path="frequencia" element={<AlunoFrequencia />} />
@@ -44,16 +63,27 @@ export default function App() {
             <Route path="perfil" element={<AlunoPerfil />} />
           </Route>
 
-          <Route path="/instrutor" element={<InstrutorLayout />}>
+          <Route
+            path="/instrutor"
+            element={
+              <RequireRole perfis={["Instrutor", "Administrador"]}>
+                <InstrutorLayout />
+              </RequireRole>
+            }
+          >
             <Route index element={<InstrutorHome />} />
-            <Route
-              path="alunos"
-              element={<InstrutorAlunos instrutorFiltro="Carla Menezes" />}
-            />
+            <Route path="alunos" element={<MeusAlunos />} />
             <Route path="alunos/:id" element={<InstrutorAlunoDetalhe />} />
           </Route>
 
-          <Route path="/recepcao" element={<RecepcaoLayout />}>
+          <Route
+            path="/recepcao"
+            element={
+              <RequireRole perfis={["Recepcionista", "Administrador"]}>
+                <RecepcaoLayout />
+              </RequireRole>
+            }
+          >
             <Route index element={<RecepcaoHome />} />
             <Route path="alunos" element={<RecepcaoAlunos />} />
             <Route path="matricula" element={<RecepcaoMatricula />} />
@@ -62,7 +92,14 @@ export default function App() {
             <Route path="pagamentos" element={<RecepcaoPagamentos />} />
           </Route>
 
-          <Route path="/admin" element={<AdminLayout />}>
+          <Route
+            path="/admin"
+            element={
+              <RequireRole perfis={["Administrador"]}>
+                <AdminLayout />
+              </RequireRole>
+            }
+          >
             <Route index element={<AdminHome />} />
             <Route path="usuarios" element={<AdminUsuarios />} />
             <Route path="planos" element={<AdminPlanos />} />
@@ -75,6 +112,7 @@ export default function App() {
           </Route>
         </Routes>
       </StoreProvider>
+      </AuthProvider>
     </ToastProvider>
   );
 }

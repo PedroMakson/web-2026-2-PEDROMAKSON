@@ -1,13 +1,13 @@
 import { useNavigate } from "react-router-dom";
 import { useStore } from "../data/store";
-
-const INSTRUTOR_LOGADO = "Carla Menezes";
+import { useAuth } from "../auth/AuthContext";
 
 export default function InstrutorHome() {
   const navigate = useNavigate();
   const { alunos } = useStore();
+  const { user } = useAuth();
 
-  const meusAlunos = alunos.filter((a) => a.instrutor === INSTRUTOR_LOGADO);
+  const meusAlunos = alunos.filter((a) => user?.perfil !== "Instrutor" || a.instrutor === user.nome);
   const precisamAtencao = meusAlunos.filter((a) => a.alerta);
 
   const kpis = [

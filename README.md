@@ -19,6 +19,19 @@ Sistema de gestão de academia desenvolvido como projeto da disciplina de Desenv
 
 Os dados são simulados em memória (`src/data/store.tsx`), sem backend — o objetivo é demonstrar a interface e as regras de negócio da aplicação.
 
+## Autenticação
+
+O login usa o Amazon Cognito (User Pool). Os perfis são grupos do Cognito (`Aluno`, `Instrutor`, `Recepcionista`, `Administrador`) e cada área do sistema só abre para o perfil correspondente.
+
+Crie um arquivo `.env.local` na raiz, copiando o `.env.example`:
+
+```
+VITE_COGNITO_USER_POOL_ID=...
+VITE_COGNITO_CLIENT_ID=...
+```
+
+No Amplify, cadastre as mesmas duas variáveis em **Hospedagem → Variáveis de ambiente**.
+
 ## Rodando localmente
 
 ```bash

@@ -40,7 +40,6 @@ export default function InstrutorLayout() {
     <AppShell
       menuItems={INSTRUTOR_MENU}
       roleLabel="Instrutor"
-      user={{ nome: "Carla Menezes", iniciais: "CM" }}
       notifications={NOTIFICACOES_INSTRUTOR}
       notifFooter="Alertas operacionais do perfil Instrutor, gerados pelo job diário (RF22–RF24)."
     >

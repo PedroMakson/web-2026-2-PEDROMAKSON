@@ -1,6 +1,7 @@
 import { type ReactNode, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { Bell, ChevronLeft, ChevronRight, LogOut, Menu, X } from "lucide-react";
+import { useAuth } from "../auth/AuthContext";
 
 export type MenuItem = {
   label: string;
@@ -20,7 +21,6 @@ export type Notification = {
 type AppShellProps = {
   menuItems: MenuItem[];
   roleLabel: string;
-  user: { nome: string; iniciais: string };
   notifications?: Notification[];
   notifFooter?: string;
   children: ReactNode;
@@ -40,12 +40,12 @@ function tagColor(tipo: string) {
 export default function AppShell({
   menuItems,
   roleLabel,
-  user,
   notifications: initialNotifications = [],
   notifFooter,
   children,
 }: AppShellProps) {
   const navigate = useNavigate();
+  const { user, sair } = useAuth();
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -107,15 +107,15 @@ export default function AppShell({
         </div>
 
         <div
-          title={user.nome}
+          title={user?.nome}
           className={`mt-[22px] flex shrink-0 items-center gap-2.5 rounded-xl bg-white/10 p-2.5 ${collapsed ? "md:justify-center md:p-2" : ""}`}
         >
           <div className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full bg-teal text-[13px] font-bold text-navy-dark">
-            {user.iniciais}
+            {user?.iniciais}
           </div>
           <div className={`min-w-0 ${collapsed ? "md:hidden" : ""}`}>
             <div className="truncate text-[13px] font-bold text-white">
-              {user.nome}
+              {user?.nome}
             </div>
             <div className="text-[11px] font-semibold text-neon">
               {roleLabel}
@@ -167,7 +167,10 @@ export default function AppShell({
         <div className="mt-2.5 border-t border-white/10 pt-2.5">
           <button
             type="button"
-            onClick={() => navigate("/login")}
+            onClick={async () => {
+              await sair();
+              navigate("/login");
+            }}
             title={collapsed ? "Sair" : undefined}
             className={`flex w-full items-center rounded-[10px] px-3 py-2.5 text-left text-sm font-semibold text-white/60 transition hover:bg-white/5 hover:text-white ${
               collapsed ? "md:justify-center" : "gap-3"

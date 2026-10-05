@@ -1,6 +1,7 @@
 import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
 import { Amplify } from "aws-amplify";
 import { fetchAuthSession, signIn, signOut } from "aws-amplify/auth";
+import { Hub } from "aws-amplify/utils";
 import { type Perfil, perfilDoGrupo } from "./perfis";
 
 Amplify.configure({
@@ -8,6 +9,15 @@ Amplify.configure({
     Cognito: {
       userPoolId: import.meta.env.VITE_COGNITO_USER_POOL_ID,
       userPoolClientId: import.meta.env.VITE_COGNITO_CLIENT_ID,
+      loginWith: {
+        oauth: {
+          domain: import.meta.env.VITE_COGNITO_DOMAIN,
+          scopes: ["openid", "email", "profile"],
+          redirectSignIn: [`${window.location.origin}/login`],
+          redirectSignOut: [`${window.location.origin}/login`],
+          responseType: "code",
+        },
+      },
     },
   },
 });
@@ -22,11 +32,16 @@ export type AuthUser = {
 type AuthValue = {
   user: AuthUser | null;
   loading: boolean;
+  aviso: string;
   entrar: (email: string, senha: string) => Promise<AuthUser>;
   sair: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthValue | null>(null);
+
+const AVISO_KEY = "gymflow:aviso-login";
+const SEM_PERFIL =
+  "Login concluído, mas seu usuário ainda não tem um perfil de acesso. Procure o administrador.";
 
 async function carregarUsuario(): Promise<AuthUser | null> {
   const session = await fetchAuthSession();
@@ -48,12 +63,31 @@ async function carregarUsuario(): Promise<AuthUser | null> {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [aviso, setAviso] = useState(() => {
+    const guardado = sessionStorage.getItem(AVISO_KEY) ?? "";
+    sessionStorage.removeItem(AVISO_KEY);
+    return guardado;
+  });
 
   useEffect(() => {
     carregarUsuario()
       .then(setUser)
       .catch(() => setUser(null))
       .finally(() => setLoading(false));
+
+    return Hub.listen("auth", async ({ payload }) => {
+      if (payload.event === "signInWithRedirect") {
+        const logado = await carregarUsuario();
+        if (logado) {
+          setUser(logado);
+        } else {
+          sessionStorage.setItem(AVISO_KEY, SEM_PERFIL);
+          await signOut();
+        }
+      } else if (payload.event === "signInWithRedirect_failure") {
+        setAviso("Não foi possível entrar com o Google. Tente novamente.");
+      }
+    });
   }, []);
 
   async function entrar(email: string, senha: string) {
@@ -77,7 +111,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, entrar, sair }}>
+    <AuthContext.Provider value={{ user, loading, aviso, entrar, sair }}>
       {children}
     </AuthContext.Provider>
   );

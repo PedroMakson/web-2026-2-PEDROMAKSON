@@ -28,9 +28,12 @@ Crie um arquivo `.env.local` na raiz, copiando o `.env.example`:
 ```
 VITE_COGNITO_USER_POOL_ID=...
 VITE_COGNITO_CLIENT_ID=...
+VITE_COGNITO_DOMAIN=...   # domínio do Cognito, usado no login com Google
 ```
 
-No Amplify, cadastre as mesmas duas variáveis em **Hospedagem → Variáveis de ambiente**.
+O login com Google é federado pelo Cognito (provedor de identidade Google, fluxo de código de autorização). A chave secreta do Google fica somente no Cognito, nunca no código.
+
+No Amplify, cadastre as mesmas variáveis em **Hospedagem → Variáveis de ambiente**.
 
 ## Rodando localmente
 

@@ -35,6 +35,26 @@ O login com Google é federado pelo Cognito (provedor de identidade Google, flux
 
 No Amplify, cadastre as mesmas variáveis em **Hospedagem → Variáveis de ambiente**.
 
+## Assistente de chat (WebSocket + Lambda + Gemini)
+
+O balão azul no canto inferior direito abre um assistente que responde dúvidas sobre o uso do sistema, de acordo com o perfil e a tela em que o usuário está.
+
+Fluxo:
+
+1. O usuário logado no Cognito tem um ID token; o front abre `wss://api.pedromaksonfontesdacosta.atchin.web.ufersa.dev.br/?token=<idToken>`.
+2. O API Gateway (tipo WebSocket, estágio `prod`) valida o token na rota `$connect` com a Lambda `authorizer` (`backend/authorizer.mjs`).
+3. Cada pergunta chega pela rota `$default` à Lambda `gymflow-chat` (`backend/chat.mjs`), que responde ao API Gateway na hora e se reinvoca em segundo plano para não depender do limite de 29 s da integração.
+4. A Lambda consulta o Google Gemini (tentando uma lista de modelos em ordem, com fallback), usando a base de conhecimento em `backend/conhecimento.mjs`, e devolve a resposta pela API de gerenciamento de conexões (`PostToConnection`).
+5. O front recebe a resposta pelo WebSocket e a exibe no balão.
+
+A conexão usa o domínio personalizado `api.…` (certificado no ACM, política TLS 1.2, mapeado para o estágio `prod`).
+
+Variáveis do front (`.env.local` e Amplify): `VITE_WS_URL` (veja `.env.example`). Sem ela, o balão indica que o assistente não está configurado.
+
+Variáveis da Lambda `gymflow-chat`: `GEMINI_API_KEY` (obrigatória, nunca versionada), `GEMINI_MODELS` (opcional, modelos separados por vírgula). Tempo limite recomendado: 60 s. Para publicar a função, envie um `.zip` com `chat.mjs` renomeado para `index.mjs` e o `conhecimento.mjs`.
+
+Ao mudar telas, menus ou regras do sistema, atualize `backend/conhecimento.mjs` para o assistente continuar correto.
+
 ## Rodando localmente
 
 ```bash

@@ -2,6 +2,7 @@ import { type ReactNode, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { Bell, ChevronLeft, ChevronRight, LogOut, Menu, X } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
+import ChatBubble from "./ChatBubble";
 
 export type MenuItem = {
   label: string;
@@ -294,6 +295,8 @@ export default function AppShell({
           {children}
         </main>
       </div>
+
+      <ChatBubble />
     </div>
   );
 }

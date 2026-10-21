@@ -25,6 +25,7 @@ import RecepcaoPagamentos from "./pages/RecepcaoPagamentos";
 import AdminLayout from "./layouts/AdminLayout";
 import AdminHome from "./pages/AdminHome";
 import AdminUsuarios from "./pages/AdminUsuarios";
+import AdminUsuarioForm from "./pages/AdminUsuarioForm";
 import AdminPlanos from "./pages/AdminPlanos";
 import AdminRelatorios from "./pages/AdminRelatorios";
 
@@ -102,9 +103,13 @@ export default function App() {
           >
             <Route index element={<AdminHome />} />
             <Route path="usuarios" element={<AdminUsuarios />} />
+            <Route path="usuarios/novo" element={<AdminUsuarioForm />} />
+            <Route path="usuarios/:id" element={<AdminUsuarioForm />} />
             <Route path="planos" element={<AdminPlanos />} />
             <Route path="relatorios" element={<AdminRelatorios />} />
             <Route path="alunos" element={<RecepcaoAlunos />} />
+            <Route path="alunos/matricula" element={<RecepcaoMatricula />} />
+            <Route path="alunos/matricula/:id" element={<RecepcaoMatricula />} />
             <Route path="checkin" element={<RecepcaoCheckin />} />
             <Route path="pagamentos" element={<RecepcaoPagamentos />} />
             <Route path="treinos" element={<InstrutorAlunos />} />

@@ -1,4 +1,4 @@
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { Bell, ChevronLeft, ChevronRight, LogOut, Menu, X } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
@@ -52,6 +52,26 @@ export default function AppShell({
   const [mobileOpen, setMobileOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [notifications, setNotifications] = useState(initialNotifications);
+  const [confirmandoSaida, setConfirmandoSaida] = useState(false);
+  const [saindo, setSaindo] = useState(false);
+
+  useEffect(() => {
+    if (!confirmandoSaida) return;
+    const fecharComEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !saindo) setConfirmandoSaida(false);
+    };
+    window.addEventListener("keydown", fecharComEsc);
+    return () => window.removeEventListener("keydown", fecharComEsc);
+  }, [confirmandoSaida, saindo]);
+
+  async function confirmarSaida() {
+    setSaindo(true);
+    try {
+      await sair();
+    } finally {
+      navigate("/login");
+    }
+  }
 
   const active = menuItems.find((item) => isActive(item, location.pathname));
   const pageTitle = active?.title ?? active?.label ?? "";
@@ -168,9 +188,9 @@ export default function AppShell({
         <div className="mt-2.5 border-t border-white/10 pt-2.5">
           <button
             type="button"
-            onClick={async () => {
-              await sair();
-              navigate("/login");
+            onClick={() => {
+              setMobileOpen(false);
+              setConfirmandoSaida(true);
             }}
             title={collapsed ? "Sair" : undefined}
             className={`flex w-full items-center rounded-[10px] px-3 py-2.5 text-left text-sm font-semibold text-white/60 transition hover:bg-white/5 hover:text-white ${
@@ -295,6 +315,51 @@ export default function AppShell({
           {children}
         </main>
       </div>
+
+      {confirmandoSaida && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-navy/60 p-5"
+          onClick={() => !saindo && setConfirmandoSaida(false)}
+        >
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="titulo-sair"
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-[400px] rounded-[20px] bg-white p-7"
+          >
+            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-danger/10 text-danger-dark">
+              <LogOut size={20} />
+            </div>
+            <h2 id="titulo-sair" className="font-display mt-4 text-2xl font-bold text-navy">
+              Sair do sistema?
+            </h2>
+            <p className="mt-1.5 text-[13.5px] leading-relaxed text-navy/60">
+              Você será desconectado
+              {user?.nome ? ` como ${user.nome}` : ""} e precisará entrar de novo para continuar.
+            </p>
+            <div className="mt-6 flex gap-2.5">
+              <button
+                type="button"
+                autoFocus
+                disabled={saindo}
+                onClick={() => setConfirmandoSaida(false)}
+                className="flex-1 rounded-[10px] border border-navy/18 py-3 text-sm font-bold text-navy transition hover:bg-navy/5 disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={saindo}
+                onClick={confirmarSaida}
+                className="flex-1 rounded-[10px] bg-navy py-3 text-sm font-bold text-white transition hover:bg-navy-hover disabled:opacity-60"
+              >
+                {saindo ? "Saindo…" : "Sair"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <ChatBubble />
     </div>

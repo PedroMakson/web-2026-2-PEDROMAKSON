@@ -1,15 +1,24 @@
 import { useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { Pencil, X } from "lucide-react";
 import { useStore } from "../data/store";
 import { useToast } from "../components/Toast";
+import DadosPessoaisFields from "../components/DadosPessoaisFields";
+import EnderecoFields from "../components/EnderecoFields";
+import TrocaPlanoPainel from "../components/TrocaPlanoPainel";
+import Obrigatorio from "../components/Obrigatorio";
+import { ENDERECO_VAZIO, soDigitos, validarEndereco } from "../lib/endereco";
+import { type DadosPessoais, validarDadosPessoais } from "../lib/pessoa";
+import { rotasPorArea } from "../lib/rotas";
 
 const PLANOS_DIAS_VENC = ["Todo dia 05", "Todo dia 10", "Todo dia 15", "Todo dia 20"];
 
 export default function RecepcaoMatricula() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const rotas = rotasPorArea(useLocation().pathname);
   const toast = useToast();
-  const { alunos, planos, salvarAluno } = useStore();
+  const { alunos, planos, salvarAluno, trocarPlano } = useStore();
 
   const editando = id ? alunos.find((a) => a.id === Number(id)) : undefined;
   const [passo, setPasso] = useState<1 | 2>(1);
@@ -19,14 +28,39 @@ export default function RecepcaoMatricula() {
   const [email, setEmail] = useState(editando?.email ?? "");
   const [tel, setTel] = useState(editando?.tel ?? "(84) 90000-0000");
   const [instrutor, setInstrutor] = useState(editando?.instrutor ?? "Carla Menezes");
+  const [endereco, setEndereco] = useState(editando?.endereco ?? ENDERECO_VAZIO);
+  const [pessoais, setPessoais] = useState<DadosPessoais>({
+    cpf: editando?.cpf ?? "",
+    nascimento: editando?.nascimento ?? "",
+    sexo: editando?.sexo ?? "",
+  });
 
   const [plano, setPlano] = useState(editando?.plano ?? "Mensal Fit");
   const [inicio, setInicio] = useState("15/09/2026");
   const [diaVenc, setDiaVenc] = useState("Todo dia 15");
+  const [diaTroca, setDiaTroca] = useState("Todo dia 10");
+  const [planoLiberado, setPlanoLiberado] = useState(false);
 
   function irPasso2() {
-    if (!nome || !email) {
+    if (!nome.trim() || !email.trim()) {
       setErro("Preencha nome e e-mail.");
+      return;
+    }
+    const erroPessoais = validarDadosPessoais(pessoais);
+    if (erroPessoais) {
+      setErro(erroPessoais);
+      return;
+    }
+    const cpfEmUso = alunos.some(
+      (a) => a.id !== editando?.id && a.cpf && soDigitos(a.cpf) === soDigitos(pessoais.cpf),
+    );
+    if (cpfEmUso) {
+      setErro("Já existe um aluno cadastrado com este CPF.");
+      return;
+    }
+    const erroEndereco = validarEndereco(endereco);
+    if (erroEndereco) {
+      setErro(erroEndereco);
       return;
     }
     setErro("");
@@ -39,20 +73,38 @@ export default function RecepcaoMatricula() {
       nome,
       email,
       tel,
-      plano,
+      // na edição o plano só muda pela troca de plano (nova matrícula e parcelas)
+      plano: editando?.plano ?? plano,
       instrutor,
+      endereco,
+      cpf: pessoais.cpf,
+      nascimento: pessoais.nascimento,
+      sexo: pessoais.sexo,
       fim: editando?.fim ?? "15/10/2026",
       matricula: editando?.matricula ?? `#2026-0${Math.floor(100 + Math.random() * 900)}`,
     });
+    if (editando && trocandoPlano) {
+      const r = trocarPlano(editando.id, plano, diaTroca, false);
+      if (!r.ok) {
+        toast(r.motivo ?? "Não foi possível trocar o plano.");
+        return;
+      }
+      toast(r.mensagem ?? "Plano atualizado.");
+      navigate(rotas.pagamentos);
+      return;
+    }
     toast(
       editando
         ? `Cadastro de ${nome.split(" ")[0]} atualizado.`
         : `Matrícula de ${nome.split(" ")[0]} concluída.`,
     );
-    navigate("/recepcao/alunos");
+    navigate(rotas.alunos);
   }
 
   const planoSelecionado = planos.find((p) => p.nome === plano) ?? planos[0];
+  const planoAtual = planos.find((p) => p.nome === editando?.plano) ?? planoSelecionado;
+  // Na edição, escolher outro plano equivale ao "Trocar plano" da listagem.
+  const trocandoPlano = !!editando && plano !== editando.plano;
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-4">
@@ -86,8 +138,12 @@ export default function RecepcaoMatricula() {
           </div>
           <div className="mt-[18px] grid grid-cols-1 gap-3.5 sm:grid-cols-2">
             <label className="flex flex-col gap-1.5 text-xs font-bold">
-              Nome completo
+              <span>
+                Nome completo
+                <Obrigatorio />
+              </span>
               <input
+                aria-required="true"
                 value={nome}
                 onChange={(e) => setNome(e.target.value)}
                 placeholder="Ana Beatriz Lima"
@@ -95,14 +151,19 @@ export default function RecepcaoMatricula() {
               />
             </label>
             <label className="flex flex-col gap-1.5 text-xs font-bold">
-              E-mail
+              <span>
+                E-mail
+                <Obrigatorio />
+              </span>
               <input
+                aria-required="true"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="ana@email.com"
                 className="rounded-[9px] border border-navy/16 px-2.5 py-2.5 text-sm font-normal"
               />
             </label>
+            <DadosPessoaisFields value={pessoais} onChange={setPessoais} />
             <label className="flex flex-col gap-1.5 text-xs font-bold">
               Telefone
               <input
@@ -125,11 +186,18 @@ export default function RecepcaoMatricula() {
               </select>
             </label>
           </div>
+          <div className="mt-6 border-t border-navy/10 pt-5">
+            <div className="mb-3.5 text-sm font-bold text-navy">Endereço</div>
+            <EnderecoFields value={endereco} onChange={setEndereco} />
+          </div>
+          <p className="mt-4 text-xs text-navy/50">
+            <span className="text-danger">*</span> Campo obrigatório
+          </p>
           {erro && <p className="mt-3.5 text-[13px] font-semibold text-danger">{erro}</p>}
           <div className="mt-5 flex justify-end gap-2.5">
             <button
               type="button"
-              onClick={() => navigate("/recepcao/alunos")}
+              onClick={() => navigate(rotas.alunos)}
               className="rounded-[10px] border border-navy/18 px-[18px] py-2.5 text-[13.5px] font-bold"
             >
               Cancelar
@@ -147,17 +215,51 @@ export default function RecepcaoMatricula() {
 
       {passo === 2 && (
         <div className="rounded-2xl border border-navy/10 bg-white p-6">
-          <div className="text-base font-bold">Matrícula e plano</div>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="text-base font-bold">Matrícula e plano</div>
+            {editando && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (planoLiberado) setPlano(editando.plano);
+                  setPlanoLiberado(!planoLiberado);
+                }}
+                className="flex items-center gap-1.5 rounded-[10px] border border-navy/18 px-3.5 py-2 text-[13px] font-bold text-navy transition hover:border-teal hover:bg-teal/10"
+              >
+                {planoLiberado ? (
+                  <>
+                    <X size={15} /> Cancelar troca
+                  </>
+                ) : (
+                  <>
+                    <Pencil size={15} /> Editar plano
+                  </>
+                )}
+              </button>
+            )}
+          </div>
 
           {editando ? (
-            <div className="mt-[18px] rounded-xl bg-beige/45 p-4 text-[13px] leading-relaxed">
-              <strong>{nome}</strong> · plano atual: {planoSelecionado.nome} —{" "}
-              {planoSelecionado.valor} · matrícula até {editando.fim}
-              <br />
-              Plano e cobranças desta matrícula não mudam aqui — use{" "}
-              <strong>Trocar plano</strong> na listagem de alunos. Alteração de cadastro
-              registrada por Júlia Alves (RNF07).
-            </div>
+            <>
+              <div className="mt-[18px] rounded-xl bg-beige/45 p-4 text-[13px] leading-relaxed">
+                <strong>{nome}</strong> · plano atual: {planoAtual.nome} — {planoAtual.valor} ·
+                matrícula até {editando.fim}
+                <br />
+                Para trocar o plano, clique em <strong>Editar plano</strong>. Alteração de cadastro
+                registrada por Júlia Alves (RNF07).
+              </div>
+              <div className="mt-4">
+                <TrocaPlanoPainel
+                  aluno={editando}
+                  planoEscolhido={plano}
+                  onPlano={setPlano}
+                  dia={diaTroca}
+                  onDia={setDiaTroca}
+                  alterando={trocandoPlano}
+                  bloqueado={!planoLiberado}
+                />
+              </div>
+            </>
           ) : (
             <>
               <div className="mt-[18px] grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -229,7 +331,7 @@ export default function RecepcaoMatricula() {
               onClick={concluir}
               className="rounded-[10px] bg-teal px-5 py-2.5 text-[13.5px] font-bold text-navy-dark transition hover:bg-neon"
             >
-              {editando ? "Salvar alterações" : "Concluir matrícula"}
+              {!editando ? "Concluir matrícula" : trocandoPlano ? "Salvar e trocar plano" : "Salvar alterações"}
             </button>
           </div>
         </div>

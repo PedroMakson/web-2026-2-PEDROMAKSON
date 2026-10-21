@@ -9,7 +9,7 @@ const RELATORIOS = [
   },
   {
     titulo: "Frequência de treino",
-    desc: "Check-ins por aluno, por instrutor e por faixa de horário.",
+    desc: "Check-ins por aluno, por instrutor, por faixa de horário e por origem (App, Recepção e Retroativo).",
   },
   {
     titulo: "Matrículas",

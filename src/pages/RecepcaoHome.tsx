@@ -2,14 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useStore } from "../data/store";
 import TrocaPlanoModal from "../components/TrocaPlanoModal";
-
-const CHECKINS_RECENTES = [
-  { nome: "Luana Freire", hora: "08:42", origem: "App" },
-  { nome: "Ana Beatriz Lima", hora: "08:20", origem: "App" },
-  { nome: "Marcela Duarte", hora: "07:58", origem: "Recepção" },
-  { nome: "Rafael Torres", hora: "07:31", origem: "App" },
-  { nome: "Pedro Makson", hora: "07:12", origem: "App" },
-];
+import { formatarDataBr } from "../lib/pessoa";
 
 function diasAte(fim: string) {
   const [d, m, a] = fim.split("/").map(Number);
@@ -20,7 +13,18 @@ function diasAte(fim: string) {
 
 export default function RecepcaoHome() {
   const navigate = useNavigate();
-  const { alunos, pagamentos } = useStore();
+  const { alunos, pagamentos, checkins } = useStore();
+
+  // os 5 check-ins mais recentes (retroativos aparecem pela data em que foram feitos)
+  const recentes = checkins
+    .filter((c) => !c.cancelado)
+    .sort((x, y) => `${y.data}${y.hora}${y.id}`.localeCompare(`${x.data}${x.hora}${x.id}`))
+    .slice(0, 5)
+    .map((c) => ({
+      nome: alunos.find((a) => a.id === c.alunoId)?.nome ?? "Aluno",
+      hora: c.hora || formatarDataBr(c.data).slice(0, 5),
+      origem: c.origem,
+    }));
   const [renovarId, setRenovarId] = useState<number | null>(null);
 
   const pendentes = pagamentos.filter((p) => !p.pago);
@@ -114,7 +118,7 @@ export default function RecepcaoHome() {
             Check-ins recentes
           </div>
           <div className="mt-3.5 flex flex-col">
-            {CHECKINS_RECENTES.map((c, i) => (
+            {recentes.map((c, i) => (
               <div
                 key={i}
                 className="flex items-center gap-3 border-b border-navy/[.07] py-2.5 last:border-0"

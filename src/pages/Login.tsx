@@ -3,6 +3,7 @@ import { Link, Navigate, useNavigate } from "react-router-dom";
 import { signInWithRedirect } from "aws-amplify/auth";
 import { useAuth } from "../auth/AuthContext";
 import { HOME_POR_PERFIL } from "../auth/perfis";
+import Obrigatorio from "../components/Obrigatorio";
 
 function mensagemDeErro(error: unknown) {
   const nome = error instanceof Error ? error.name : "";
@@ -103,9 +104,13 @@ export default function Login() {
 
           <form className="mt-6 flex flex-col gap-3.5" onSubmit={handleSubmit}>
             <label className="flex flex-col gap-1.5 text-sm font-semibold text-navy">
-              E-mail
+              <span>
+                E-mail
+                <Obrigatorio />
+              </span>
               <input
                 type="email"
+                aria-required="true"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 placeholder="voce@email.com"
@@ -114,9 +119,13 @@ export default function Login() {
             </label>
 
             <label className="flex flex-col gap-1.5 text-sm font-semibold text-navy">
-              Senha
+              <span>
+                Senha
+                <Obrigatorio />
+              </span>
               <input
                 type="password"
+                aria-required="true"
                 value={senha}
                 onChange={(event) => setSenha(event.target.value)}
                 placeholder="••••••••"

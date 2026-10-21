@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { X } from "lucide-react";
-import { brl, mesesPlano, useStore, valorNum } from "../data/store";
+import { useStore } from "../data/store";
 import { useToast } from "./Toast";
-
-const DIAS = ["Todo dia 05", "Todo dia 10", "Todo dia 15", "Todo dia 20"];
+import TrocaPlanoPainel from "./TrocaPlanoPainel";
+import { rotasPorArea } from "../lib/rotas";
 
 export default function TrocaPlanoModal({
   open,
@@ -17,9 +17,10 @@ export default function TrocaPlanoModal({
   alunoId: number | null;
   renovacao: boolean;
 }) {
-  const { alunos, planos, pagamentos, trocarPlano } = useStore();
+  const { alunos, trocarPlano } = useStore();
   const toast = useToast();
   const navigate = useNavigate();
+  const rotas = rotasPorArea(useLocation().pathname);
 
   const aluno = alunos.find((a) => a.id === alunoId);
   const [planoEscolhido, setPlanoEscolhido] = useState(aluno?.plano ?? "");
@@ -34,23 +35,6 @@ export default function TrocaPlanoModal({
 
   if (!open || !aluno) return null;
 
-  const atual = planos.find((p) => p.nome === aluno.plano);
-  const novo = planos.find((p) => p.nome === planoEscolhido) ?? atual ?? planos[0];
-  const n = mesesPlano(novo.duracao);
-  const parcela = valorNum(novo.valor) / n;
-  const abertas = pagamentos.filter((p) => p.nome === aluno.nome && !p.pago).length;
-  const pagas = pagamentos.filter((p) => p.nome === aluno.nome && p.pago).length;
-
-  const efeitos = [
-    `${renovacao ? "Renovação: a" : "A"} matrícula atual é encerrada e uma nova é criada referenciando a anterior — treino, avaliações e check-ins são preservados (regra 5).`,
-    `${pagas} parcela(s) já paga(s) permanecem no histórico, vinculadas à matrícula antiga.`,
-    `${abertas} parcela(s) em aberto do plano ${aluno.plano} são canceladas.`,
-    `${n} ${n > 1 ? "novas parcelas de" : "nova cobrança de"} ${brl(parcela)}, ${dia.toLowerCase()}.`,
-    atual?.regra
-      ? `Regra do plano atual: ${atual.regra}`
-      : "Sem regra de cancelamento cadastrada para o plano atual.",
-  ];
-
   function confirmar() {
     const r = trocarPlano(aluno!.id, planoEscolhido, dia, renovacao);
     if (!r.ok) {
@@ -59,7 +43,7 @@ export default function TrocaPlanoModal({
     }
     toast(r.mensagem ?? "Plano atualizado.");
     onClose();
-    navigate("/recepcao/pagamentos");
+    navigate(rotas.pagamentos);
   }
 
   return (
@@ -85,52 +69,15 @@ export default function TrocaPlanoModal({
           </button>
         </div>
 
-        <div className="mt-5 grid grid-cols-1 gap-2.5 sm:grid-cols-3">
-          {planos.map((p) => (
-            <button
-              key={p.id}
-              type="button"
-              onClick={() => setPlanoEscolhido(p.nome)}
-              className={`rounded-[11px] border-2 p-3 text-left ${
-                planoEscolhido === p.nome
-                  ? "border-teal bg-teal/[.08]"
-                  : "border-navy/12 bg-white"
-              }`}
-            >
-              <div className="text-[13px] font-bold">{p.nome}</div>
-              <div className="font-display mt-0.5 text-[22px] font-bold">{p.valor}</div>
-              <div className="text-[11px] text-navy/50">
-                {mesesPlano(p.duracao) > 1
-                  ? `${mesesPlano(p.duracao)}x de ${brl(valorNum(p.valor) / mesesPlano(p.duracao))}`
-                  : p.duracao}
-              </div>
-            </button>
-          ))}
-        </div>
-
-        <label className="mt-4 flex flex-col gap-1.5 text-xs font-bold">
-          Vencimento das novas parcelas
-          <select
-            value={dia}
-            onChange={(e) => setDia(e.target.value)}
-            className="rounded-[9px] border border-navy/16 bg-white px-2.5 py-2.5 text-sm font-normal"
-          >
-            {DIAS.map((d) => (
-              <option key={d}>{d}</option>
-            ))}
-          </select>
-        </label>
-
-        <div className="mt-4 flex flex-col gap-2 rounded-xl bg-beige/45 p-4">
-          <div className="text-[11px] font-bold uppercase tracking-wider text-navy/50">
-            O que acontece ao confirmar
-          </div>
-          {efeitos.map((e, i) => (
-            <div key={i} className="flex gap-2 text-[13px] leading-relaxed">
-              <span className="font-bold text-teal-mid">·</span>
-              <span>{e}</span>
-            </div>
-          ))}
+        <div className="mt-5">
+          <TrocaPlanoPainel
+            aluno={aluno}
+            planoEscolhido={planoEscolhido}
+            onPlano={setPlanoEscolhido}
+            dia={dia}
+            onDia={setDia}
+            renovacao={renovacao}
+          />
         </div>
 
         <div className="mt-5 flex gap-2.5">

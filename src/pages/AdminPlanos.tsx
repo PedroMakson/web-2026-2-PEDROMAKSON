@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Plus, X } from "lucide-react";
 import { useStore, type Plano } from "../data/store";
 import { useToast } from "../components/Toast";
+import Obrigatorio from "../components/Obrigatorio";
 
 export default function AdminPlanos() {
   const { planos, salvarPlano } = useStore();
@@ -87,8 +88,12 @@ export default function AdminPlanos() {
             </div>
             <div className="mt-4.5 flex flex-col gap-3">
               <label className="flex flex-col gap-1.5 text-xs font-bold">
-                Nome do plano
+                <span>
+                  Nome do plano
+                  <Obrigatorio />
+                </span>
                 <input
+                  aria-required="true"
                   value={form.nome}
                   onChange={(e) => setForm({ ...form, nome: e.target.value })}
                   placeholder="Mensal Fit"
@@ -96,8 +101,12 @@ export default function AdminPlanos() {
                 />
               </label>
               <label className="flex flex-col gap-1.5 text-xs font-bold">
-                Valor
+                <span>
+                  Valor
+                  <Obrigatorio />
+                </span>
                 <input
+                  aria-required="true"
                   value={form.valor}
                   onChange={(e) => setForm({ ...form, valor: e.target.value })}
                   placeholder="R$ 129,90"
@@ -124,6 +133,9 @@ export default function AdminPlanos() {
                 />
               </label>
             </div>
+            <p className="mt-4 text-xs text-navy/50">
+              <span className="text-danger">*</span> Campo obrigatório
+            </p>
             <button
               type="button"
               onClick={salvar}

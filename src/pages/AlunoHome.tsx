@@ -1,14 +1,16 @@
 import { type ReactNode, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Droplet } from "lucide-react";
+import { useAuth } from "../auth/AuthContext";
+import { useStore } from "../data/store";
+import { useAlunoLogado } from "../data/useAlunoLogado";
 import { useToast } from "../components/Toast";
 import PixModal from "../components/PixModal";
 import { MATRICULA_LINHAS } from "../data/aluno";
+import { bloqueioDoAluno, checkinDoDia, sequenciaAtual } from "../lib/checkins";
+import { dataBrParaIso, HOJE_DEMO, LETRA_DIA, paraData, somarDias } from "../lib/datas";
 
 const PROX_COBRANCA = { valor: "R$ 129,90", venc: "17/09/2026", parcela: "única" };
-
-const FREQ_DIAS = ["S", "T", "Q", "Q", "S", "S", "D", "S", "T", "Q", "Q", "S", "S", "D"];
-const FREQ_ON = [1, 1, 0, 1, 1, 0, 0, 1, 1, 1, 0, 1, 1, 0];
 
 function Card({
   className = "",
@@ -29,28 +31,31 @@ function Card({
 export default function AlunoHome() {
   const navigate = useNavigate();
   const toast = useToast();
-  const [streak, setStreak] = useState(6);
-  const [checkinHoje, setCheckinHoje] = useState(false);
+  const { user } = useAuth();
+  const aluno = useAlunoLogado();
+  const { checkins, registrarCheckin } = useStore();
   const [pixOpen, setPixOpen] = useState(false);
   const [pendente, setPendente] = useState(true);
 
-  // Mesmas regras do protótipo: matrícula em dia e mensalidade ainda dentro do
-  // prazo, então o check-in não está bloqueado — só a cobrança está em aberto.
-  const atrasado = false;
-  const matriculaVencida = false;
-  const bloqueiaCheckin = atrasado || matriculaVencida;
+  const feitoHoje = checkinDoDia(checkins, aluno.id, HOJE_DEMO);
+  const streak = sequenciaAtual(checkins, aluno.id);
+
+  // Mesmas regras do protótipo: cobrança em aberto dentro do prazo não bloqueia o check-in;
+  // só mensalidade atrasada ou matrícula vencida bloqueiam.
+  const matriculaVencida = dataBrParaIso(aluno.fim) < HOJE_DEMO;
+  const bloqueiaCheckin = !!bloqueioDoAluno(aluno);
 
   function fazerCheckin() {
-    if (bloqueiaCheckin) {
-      toast("Mensalidade em atraso: check-in bloqueado (regra de negócio 1).");
+    const r = registrarCheckin({
+      alunoId: aluno.id,
+      data: HOJE_DEMO,
+      por: user?.nome ?? aluno.nome,
+      perfil: "Aluno",
+    });
+    if (!r.ok) {
+      toast(r.erro ?? "Não foi possível registrar o check-in.");
       return;
     }
-    if (checkinHoje) {
-      toast("Você já fez check-in hoje — um por dia (RF04).");
-      return;
-    }
-    setCheckinHoje(true);
-    setStreak((s) => s + 1);
     toast(`Check-in registrado! Sequência de ${streak + 1} dias.`);
   }
 
@@ -58,15 +63,24 @@ export default function AlunoHome() {
     ? matriculaVencida
       ? "Matrícula vencida — renove na recepção para liberar o check-in."
       : "Mensalidade em atraso: regularize para liberar o check-in."
-    : checkinHoje
-      ? "Check-in de hoje registrado às 07:12."
+    : feitoHoje
+      ? `Check-in de hoje registrado às ${feitoHoje.hora}.`
       : "Seu check-in de hoje ainda não foi feito.";
 
   const labelCheckin = bloqueiaCheckin
     ? "Check-in bloqueado"
-    : checkinHoje
+    : feitoHoje
       ? "Check-in feito"
       : "Fazer check-in";
+
+  // últimos 14 dias, do mais antigo ao de hoje
+  const ultimos14 = Array.from({ length: 14 }, (_, i) => {
+    const data = somarDias(HOJE_DEMO, i - 13);
+    return {
+      letra: LETRA_DIA[paraData(data).getDay()],
+      feito: !!checkinDoDia(checkins, aluno.id, data),
+    };
+  });
 
   return (
     <div className="flex flex-col gap-4">
@@ -93,11 +107,11 @@ export default function AlunoHome() {
             <button
               type="button"
               onClick={fazerCheckin}
-              disabled={bloqueiaCheckin}
+              disabled={bloqueiaCheckin || !!feitoHoje}
               className={`rounded-xl px-[30px] py-4 text-[15px] font-bold ${
                 bloqueiaCheckin
                   ? "cursor-not-allowed bg-white/10 text-white/50"
-                  : checkinHoje
+                  : feitoHoje
                     ? "cursor-default bg-neon/15 text-neon"
                     : "animate-[gfPulse_2.4s_ease-in-out_infinite] cursor-pointer bg-neon text-navy-dark"
               }`}
@@ -158,17 +172,17 @@ export default function AlunoHome() {
             Frequência — últimos 14 dias
           </div>
           <div className="mt-[18px] flex min-h-[120px] flex-1 items-end gap-1.5">
-            {FREQ_DIAS.map((dia, i) => (
+            {ultimos14.map((dia, i) => (
               <div
                 key={i}
                 className="flex h-full flex-1 flex-col justify-end gap-1.5"
               >
                 <div
-                  className={`w-full rounded-[5px] ${FREQ_ON[i] ? "bg-teal" : "bg-navy/10"}`}
-                  style={{ height: `${FREQ_ON[i] ? 55 + (i % 3) * 14 : 14}%` }}
+                  className={`w-full rounded-[5px] ${dia.feito ? "bg-teal" : "bg-navy/10"}`}
+                  style={{ height: `${dia.feito ? 55 + (i % 3) * 14 : 14}%` }}
                 />
                 <div className="text-center text-[9px] text-navy/40">
-                  {dia}
+                  {dia.letra}
                 </div>
               </div>
             ))}

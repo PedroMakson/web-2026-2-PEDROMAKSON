@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { FileText } from "lucide-react";
+import { useStore } from "../data/store";
+import { HOJE_DEMO, somarDias } from "../lib/datas";
 
 const PERIODOS = ["7 dias", "30 dias", "90 dias"] as const;
 type Periodo = (typeof PERIODOS)[number];
@@ -27,11 +29,21 @@ const FAIXAS = [
 
 export default function AdminHome() {
   const navigate = useNavigate();
+  const { checkins } = useStore();
   const [periodo, setPeriodo] = useState<Periodo>("30 dias");
   const d = DADOS[periodo];
   const rv = RECEITA_VALS[periodo];
   const max = Math.max(...rv);
   const unidade = periodo === "90 dias" ? "k" : "R$ ";
+
+  // check-ins por origem nos últimos 30 dias (a partir do "hoje" da demonstração)
+  const desde = somarDias(HOJE_DEMO, -30);
+  const recentes = checkins.filter((c) => !c.cancelado && c.data > desde && c.data <= HOJE_DEMO);
+  const porOrigem = (["App", "Recepção", "Retroativo"] as const).map((origem) => ({
+    origem,
+    total: recentes.filter((c) => c.origem === origem).length,
+  }));
+  const totalOrigens = Math.max(1, recentes.length);
 
   const kpis = [
     { label: "Receita", valor: d.receita, delta: d.dR, destaque: true },
@@ -143,6 +155,30 @@ export default function AdminHome() {
               </div>
             ))}
           </div>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-navy/10 bg-white p-[22px]">
+        <div className="text-[11px] font-bold uppercase tracking-wider text-navy/45">
+          Check-ins por origem — últimos 30 dias
+        </div>
+        <div className="mt-[18px] flex flex-col gap-3">
+          {porOrigem.map((o) => (
+            <div key={o.origem}>
+              <div className="flex justify-between text-[13px] font-semibold">
+                <span>{o.origem}</span>
+                <span className="text-navy/55">{o.total}</span>
+              </div>
+              <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-navy/[.08]">
+                <div
+                  className={`h-full ${
+                    o.origem === "App" ? "bg-teal" : o.origem === "Recepção" ? "bg-navy" : "bg-[#d69e2e]"
+                  }`}
+                  style={{ width: `${Math.round((o.total / totalOrigens) * 100)}%` }}
+                />
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     </div>

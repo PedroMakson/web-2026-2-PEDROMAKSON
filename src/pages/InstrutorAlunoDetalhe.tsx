@@ -1,8 +1,15 @@
 import { useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { Plus, X } from "lucide-react";
+import { useAuth } from "../auth/AuthContext";
 import { useStore } from "../data/store";
+import CalendarioFrequencia, { NavegacaoMes } from "../components/CalendarioFrequencia";
+import { DetalheCheckinModal } from "../components/CheckinModais";
+import { type Checkin, porSemana, totalNoMes, vigentes } from "../lib/checkins";
+import { HOJE_DEMO, paraData } from "../lib/datas";
 import { useToast } from "../components/Toast";
+import Obrigatorio from "../components/Obrigatorio";
+import { rotasPorArea } from "../lib/rotas";
 
 type Exercicio = { nome: string; series: string; reps: string; carga: string };
 
@@ -23,7 +30,7 @@ const OBSERVACOES_PADRAO = [
   { texto: "Prefere treinar cedo; ajustar volume para sessões de 50 minutos.", instrutor: "Carla Menezes", criadoEm: "10/06/2026 07:15" },
 ];
 
-const FREQ_SEMANAS = [2, 3, 4, 3, 1, 4, 3, 2];
+const META_SEMANAL = 4;
 
 const ABAS = ["treino", "aval", "freq"] as const;
 type Aba = (typeof ABAS)[number];
@@ -31,8 +38,10 @@ type Aba = (typeof ABAS)[number];
 export default function InstrutorAlunoDetalhe() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const rotas = rotasPorArea(useLocation().pathname);
   const toast = useToast();
-  const { alunos } = useStore();
+  const { alunos, checkins } = useStore();
+  const { user } = useAuth();
 
   const [aba, setAba] = useState<Aba>("treino");
   const [exercicios, setExercicios] = useState<Exercicio[]>(EXERCICIOS_PADRAO);
@@ -40,6 +49,9 @@ export default function InstrutorAlunoDetalhe() {
   const [observacoes, setObservacoes] = useState(OBSERVACOES_PADRAO);
   const [novaObs, setNovaObs] = useState("");
   const [form, setForm] = useState({ peso: "", altura: "", gordura: "", cintura: "", obs: "" });
+  const hoje = paraData(HOJE_DEMO);
+  const [cursor, setCursor] = useState(new Date(hoje.getFullYear(), hoje.getMonth(), 1));
+  const [detalhe, setDetalhe] = useState<Checkin | null>(null);
 
   const aluno = alunos.find((a) => a.id === Number(id));
 
@@ -49,7 +61,7 @@ export default function InstrutorAlunoDetalhe() {
         <p className="text-sm text-navy/60">Aluno não encontrado.</p>
         <button
           type="button"
-          onClick={() => navigate("/instrutor/alunos")}
+          onClick={() => navigate(rotas.treinos)}
           className="mt-3 text-sm font-bold text-teal-mid"
         >
           ← Meus alunos
@@ -191,8 +203,12 @@ export default function InstrutorAlunoDetalhe() {
             <div className="text-base font-bold">Nova avaliação física</div>
             <div className="mt-4 grid grid-cols-2 gap-3">
               <label className="flex flex-col gap-1.5 text-xs font-bold">
-                Peso (kg)
+                <span>
+                  Peso (kg)
+                  <Obrigatorio />
+                </span>
                 <input
+                  aria-required="true"
                   value={form.peso}
                   onChange={(e) => setForm({ ...form, peso: e.target.value })}
                   placeholder="78,4"
@@ -200,8 +216,12 @@ export default function InstrutorAlunoDetalhe() {
                 />
               </label>
               <label className="flex flex-col gap-1.5 text-xs font-bold">
-                Altura (m)
+                <span>
+                  Altura (m)
+                  <Obrigatorio />
+                </span>
                 <input
+                  aria-required="true"
                   value={form.altura}
                   onChange={(e) => setForm({ ...form, altura: e.target.value })}
                   placeholder="1,78"
@@ -237,6 +257,9 @@ export default function InstrutorAlunoDetalhe() {
                 className="resize-y rounded-[9px] border border-navy/16 px-2.5 py-2.5 text-sm font-normal"
               />
             </label>
+            <p className="mt-3 text-xs text-navy/50">
+              <span className="text-danger">*</span> Campo obrigatório
+            </p>
             <button
               type="button"
               onClick={() => {
@@ -324,30 +347,72 @@ export default function InstrutorAlunoDetalhe() {
         </div>
       )}
 
-      {aba === "freq" && (
-        <div className="rounded-2xl border border-navy/10 bg-white p-[22px]">
-          <div className="text-[11px] font-bold uppercase tracking-wider text-navy/45">
-            Frequência — últimas 8 semanas
-          </div>
-          <div className="mt-5 flex h-[140px] items-end gap-2.5">
-            {FREQ_SEMANAS.map((v, i) => (
-              <div key={i} className="flex h-full flex-1 flex-col justify-end gap-2">
-                <div className="text-center text-[11px] font-bold text-navy/60">{v}</div>
-                <div
-                  className={`w-full rounded-t-md ${
-                    v <= 1 ? "bg-danger/35" : v >= 4 ? "bg-teal" : "bg-teal/55"
-                  }`}
-                  style={{ height: `${(v / 4) * 100}%` }}
-                />
-                <div className="text-center text-[10px] text-navy/45">S{i + 1}</div>
+      {aba === "freq" && (() => {
+        const semanas = porSemana(checkins, aluno.id);
+        const media = semanas.reduce((t, v) => t + v, 0) / semanas.length;
+        const ano = cursor.getFullYear();
+        const mes = cursor.getMonth();
+        const retroativos = vigentes(checkins, aluno.id).filter((c) => c.origem === "Retroativo").length;
+        return (
+          <div className="flex flex-col gap-4">
+            <div className="rounded-2xl border border-navy/10 bg-white p-[22px]">
+              <div className="text-[11px] font-bold uppercase tracking-wider text-navy/45">
+                Frequência — últimas 8 semanas
               </div>
-            ))}
+              <div className="mt-5 flex h-[140px] items-end gap-2.5">
+                {semanas.map((v, i) => (
+                  <div key={i} className="flex h-full flex-1 flex-col justify-end gap-2">
+                    <div className="text-center text-[11px] font-bold text-navy/60">{v}</div>
+                    <div
+                      className={`w-full rounded-t-md ${
+                        v <= 1 ? "bg-danger/35" : v >= META_SEMANAL ? "bg-teal" : "bg-teal/55"
+                      }`}
+                      style={{ height: `${Math.min(100, (v / META_SEMANAL) * 100)}%` }}
+                    />
+                    <div className="text-center text-[10px] text-navy/45">S{i + 1}</div>
+                  </div>
+                ))}
+              </div>
+              <p className="mt-4 text-xs text-navy/45">
+                Média de {media.toFixed(1).replace(".", ",")} check-ins por semana. Meta do plano:{" "}
+                {META_SEMANAL}.
+                {retroativos > 0 &&
+                  ` ${retroativos} check-in(s) retroativo(s) no histórico, destacados em amarelo no calendário.`}
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-navy/10 bg-white p-[22px]">
+              <NavegacaoMes
+                ano={ano}
+                mes={mes}
+                total={totalNoMes(checkins, aluno.id, ano, mes)}
+                onMudar={(d) => setCursor(new Date(ano, mes + d, 1))}
+              />
+              <div className="mt-4">
+                <CalendarioFrequencia
+                  ano={ano}
+                  mes={mes}
+                  checkins={vigentes(checkins, aluno.id)}
+                  onDetalhe={setDetalhe}
+                />
+              </div>
+              <p className="mt-4 text-xs text-navy/45">
+                Consulta apenas: quem registra check-ins é o aluno ou a recepção.
+              </p>
+            </div>
+
+            {detalhe && (
+              <DetalheCheckinModal
+                checkin={detalhe}
+                nomeAluno={aluno.nome}
+                podeCancelar={user?.perfil === "Administrador"}
+                perfil={user?.perfil === "Administrador" ? "Administrador" : "Recepcionista"}
+                onClose={() => setDetalhe(null)}
+              />
+            )}
           </div>
-          <p className="mt-4 text-xs text-navy/45">
-            Média de 3,1 check-ins por semana. Meta do plano: 4.
-          </p>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

@@ -10,6 +10,7 @@ import { useNavigate } from "react-router-dom";
 import { confirmResetPassword, resetPassword } from "aws-amplify/auth";
 import { Check, Circle } from "lucide-react";
 import { useToast } from "../components/Toast";
+import Obrigatorio from "../components/Obrigatorio";
 
 const TAMANHO_CODIGO = 6;
 const SIMBOLO = /[\^$*.[\]{}()?\-"!@#%&/\\,><':;|_~`+=]/;
@@ -183,15 +184,26 @@ export default function RecuperarSenha() {
         <form className="mt-5 flex flex-col gap-1.5" onSubmit={handleSubmit}>
           {etapa === "email" && (
             <label className="flex flex-col gap-1.5 text-sm font-semibold text-navy">
-              E-mail
+              <span>
+                E-mail
+                <Obrigatorio />
+              </span>
               <input
                 type="email"
+                aria-required="true"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 placeholder="voce@email.com"
                 className={inputClass}
               />
             </label>
+          )}
+
+          {etapa === "codigo" && (
+            <span className="text-sm font-semibold text-navy">
+              Código de verificação
+              <Obrigatorio />
+            </span>
           )}
 
           {etapa === "codigo" && (
@@ -220,9 +232,13 @@ export default function RecuperarSenha() {
           {etapa === "senha" && (
             <>
               <label className="flex flex-col gap-1.5 text-sm font-semibold text-navy">
-                Nova senha
+                <span>
+                  Nova senha
+                  <Obrigatorio />
+                </span>
                 <input
                   type="password"
+                  aria-required="true"
                   value={novaSenha}
                   onChange={(event) => setNovaSenha(event.target.value)}
                   autoComplete="new-password"
@@ -230,9 +246,13 @@ export default function RecuperarSenha() {
                 />
               </label>
               <label className="mt-2 flex flex-col gap-1.5 text-sm font-semibold text-navy">
-                Confirmar nova senha
+                <span>
+                  Confirmar nova senha
+                  <Obrigatorio />
+                </span>
                 <input
                   type="password"
+                  aria-required="true"
                   value={confirmacao}
                   onChange={(event) => setConfirmacao(event.target.value)}
                   autoComplete="new-password"

@@ -1,12 +1,14 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Lock, Pencil, Plus, Repeat, Search, Unlock } from "lucide-react";
 import { useStore } from "../data/store";
 import { useToast } from "../components/Toast";
 import TrocaPlanoModal from "../components/TrocaPlanoModal";
+import { rotasPorArea } from "../lib/rotas";
 
 export default function RecepcaoAlunos() {
   const navigate = useNavigate();
+  const rotas = rotasPorArea(useLocation().pathname);
   const toast = useToast();
   const { alunos, toggleAcessoAluno } = useStore();
   const [busca, setBusca] = useState("");
@@ -30,7 +32,7 @@ export default function RecepcaoAlunos() {
         </div>
         <button
           type="button"
-          onClick={() => navigate("/recepcao/matricula")}
+          onClick={() => navigate(rotas.matricula)}
           className="flex items-center gap-1.5 whitespace-nowrap rounded-xl bg-navy px-4 py-3 text-sm font-bold text-white"
         >
           <Plus size={16} /> Novo aluno
@@ -81,7 +83,7 @@ export default function RecepcaoAlunos() {
                     <button
                       type="button"
                       title="Editar dados do aluno"
-                      onClick={() => navigate(`/recepcao/matricula/${a.id}`)}
+                      onClick={() => navigate(`${rotas.matricula}/${a.id}`)}
                       className="flex h-[34px] w-[34px] items-center justify-center rounded-[9px] border border-navy/18 text-navy transition hover:border-teal hover:bg-teal/10"
                     >
                       <Pencil size={15} />

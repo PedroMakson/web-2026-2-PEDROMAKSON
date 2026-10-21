@@ -61,7 +61,7 @@ O instrutor vê apenas os alunos vinculados a ele.
 O menu tem três seções. Além da gestão, o administrador acessa as telas da recepção e do instrutor.
 - Gestão
   - Indicadores (Painel de indicadores): períodos 7, 30 e 90 dias; cartões Receita, Inadimplência, Matrículas e Frequência média, com a variação; gráficos "Receita por mês" e "Frequência por faixa de horário"; botão "Relatório completo" abre Relatórios.
-  - Usuários e perfis (Usuários e permissões): lista da equipe (instrutores, recepcionistas e administradores) com busca. "Novo usuário" (nome, e-mail, telefone e perfil de acesso), "Editar", troca do perfil direto na lista e "Bloquear" ou "Desbloquear" (bloqueado não consegue entrar). Alunos são cadastrados pela recepção, não aqui.
+  - Usuários e perfis (Usuários e permissões): lista da equipe (instrutores, recepcionistas e administradores) com busca. "Novo usuário" (nome, e-mail, telefone e perfil de acesso), "Editar" (é só por ele que se altera o perfil de acesso; na lista o perfil aparece apenas para consulta) e "Bloquear" ou "Desbloquear" (bloqueado não consegue entrar). Alunos são cadastrados pela recepção, não aqui.
   - Planos: cartões dos planos com valor, duração, regra de cancelamento e quantidade de alunos ativos; "Editar plano" e "Novo plano" (nome, valor, duração e regra).
   - Relatórios: Receita e inadimplência, Frequência de treino, Matrículas e Avaliações físicas. Escolhe-se o período (7, 30 ou 90 dias) e clica-se em "Exportar PDF"; as "Exportações recentes" ficam listadas abaixo.
 - Recepção (mesmas telas do perfil Recepcionista): Alunos e matrículas, Check-in manual e Pagamentos.
@@ -81,6 +81,6 @@ O menu tem três seções. Além da gestão, o administrador acessa as telas da 
 - Registrar avaliação física: Instrutor > Meus alunos > escolher o aluno > aba Avaliação.
 - Editar treino: Instrutor > Meus alunos > escolher o aluno > aba Treino > "Salvar treino".
 - Criar ou editar plano: Administrador > Planos.
-- Cadastrar funcionário ou mudar perfil: Administrador > Usuários e perfis.
+- Cadastrar funcionário ou mudar perfil: Administrador > Usuários e perfis > "Novo usuário", ou "Editar" para mudar o perfil de acesso de quem já existe.
 - Gerar relatório em PDF: Administrador > Relatórios > "Exportar PDF".
 `;

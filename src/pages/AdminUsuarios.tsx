@@ -6,7 +6,7 @@ import { useToast } from "../components/Toast";
 const PERFIS: Usuario["perfil"][] = ["Instrutor", "Recepcionista", "Administrador"];
 
 export default function AdminUsuarios() {
-  const { usuarios, toggleUsuario, setPerfilUsuario, salvarUsuario } = useStore();
+  const { usuarios, toggleUsuario, salvarUsuario } = useStore();
   const toast = useToast();
   const [busca, setBusca] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
@@ -35,7 +35,14 @@ export default function AdminUsuarios() {
       return;
     }
     salvarUsuario({ id: editId ?? undefined, ...form });
-    toast(editId ? "Usuário atualizado." : "Usuário cadastrado.");
+    const perfilAnterior = editId ? usuarios.find((u) => u.id === editId)?.perfil : undefined;
+    toast(
+      !editId
+        ? "Usuário cadastrado."
+        : perfilAnterior && perfilAnterior !== form.perfil
+          ? `Usuário atualizado — perfil alterado para ${form.perfil}.`
+          : "Usuário atualizado.",
+    );
     setModalOpen(false);
   }
 
@@ -78,18 +85,9 @@ export default function AdminUsuarios() {
                   <div className="text-xs text-navy/50">{u.email}</div>
                 </td>
                 <td className="px-3 py-[14px]">
-                  <select
-                    value={u.perfil}
-                    onChange={(e) => {
-                      setPerfilUsuario(u.id, e.target.value as Usuario["perfil"]);
-                      toast(`${u.nome.split(" ")[0]} agora é ${e.target.value}.`);
-                    }}
-                    className="rounded-[9px] border border-navy/16 bg-white px-2.5 py-2 text-[13px] font-semibold text-navy/75"
-                  >
-                    {PERFIS.map((p) => (
-                      <option key={p}>{p}</option>
-                    ))}
-                  </select>
+                  <span className="rounded-full bg-navy/[.07] px-3 py-1.5 text-[13px] font-semibold text-navy/75">
+                    {u.perfil}
+                  </span>
                 </td>
                 <td className="px-3 py-[14px]">
                   <span

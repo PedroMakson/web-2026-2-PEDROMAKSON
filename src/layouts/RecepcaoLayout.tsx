@@ -1,5 +1,5 @@
 import { Outlet } from "react-router-dom";
-import { CheckCircle2, Home, Users, Wallet } from "lucide-react";
+import { CheckCircle2, Home, User, Users, Wallet } from "lucide-react";
 import AppShell, { type MenuItem } from "../components/AppShell";
 
 const RECEPCAO_MENU: MenuItem[] = [
@@ -16,6 +16,7 @@ const RECEPCAO_MENU: MenuItem[] = [
     icon: <CheckCircle2 size={18} />,
   },
   { label: "Pagamentos", to: "/recepcao/pagamentos", icon: <Wallet size={18} /> },
+  { label: "Meu perfil", to: "/recepcao/perfil", icon: <User size={18} /> },
 ];
 
 const NOTIFICACOES_RECEPCAO = [

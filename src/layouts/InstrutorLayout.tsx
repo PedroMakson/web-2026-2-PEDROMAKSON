@@ -1,5 +1,5 @@
 import { Outlet } from "react-router-dom";
-import { Home, Users } from "lucide-react";
+import { Home, User, Users } from "lucide-react";
 import AppShell, { type MenuItem } from "../components/AppShell";
 
 const INSTRUTOR_MENU: MenuItem[] = [
@@ -10,6 +10,7 @@ const INSTRUTOR_MENU: MenuItem[] = [
     title: "Painel do instrutor",
   },
   { label: "Meus alunos", to: "/instrutor/alunos", icon: <Users size={18} /> },
+  { label: "Meu perfil", to: "/instrutor/perfil", icon: <User size={18} /> },
 ];
 
 const NOTIFICACOES_INSTRUTOR = [

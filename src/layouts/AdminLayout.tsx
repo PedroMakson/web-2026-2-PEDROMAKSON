@@ -5,6 +5,7 @@ import {
   Gauge,
   FileText,
   Tag,
+  User,
   Users,
   Wallet,
 } from "lucide-react";
@@ -44,6 +45,12 @@ const ADMIN_MENU: MenuItem[] = [
     to: "/admin/treinos",
     icon: <Dumbbell size={18} />,
     section: "Instrutor",
+  },
+  {
+    label: "Meu perfil",
+    to: "/admin/perfil",
+    icon: <User size={18} />,
+    section: "Conta",
   },
 ];
 

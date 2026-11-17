@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { ToastProvider } from "./components/Toast";
 import { StoreProvider } from "./data/store";
 import { AuthProvider, useAuth } from "./auth/AuthContext";
+import { FotoPerfilProvider } from "./auth/FotoPerfil";
 import RequireRole from "./auth/RequireRole";
 import Login from "./pages/Login";
 import RecuperarSenha from "./pages/RecuperarSenha";
@@ -12,6 +13,7 @@ import AlunoFrequencia from "./pages/AlunoFrequencia";
 import AlunoAvaliacoes from "./pages/AlunoAvaliacoes";
 import AlunoFinanceiro from "./pages/AlunoFinanceiro";
 import AlunoPerfil from "./pages/AlunoPerfil";
+import MeuPerfil from "./pages/MeuPerfil";
 import InstrutorLayout from "./layouts/InstrutorLayout";
 import InstrutorHome from "./pages/InstrutorHome";
 import InstrutorAlunos from "./pages/InstrutorAlunos";
@@ -42,6 +44,7 @@ export default function App() {
   return (
     <ToastProvider>
       <AuthProvider>
+      <FotoPerfilProvider>
       <StoreProvider>
         <Routes>
           <Route path="/" element={<Navigate to="/login" replace />} />
@@ -75,6 +78,7 @@ export default function App() {
             <Route index element={<InstrutorHome />} />
             <Route path="alunos" element={<MeusAlunos />} />
             <Route path="alunos/:id" element={<InstrutorAlunoDetalhe />} />
+            <Route path="perfil" element={<MeuPerfil />} />
           </Route>
 
           <Route
@@ -91,6 +95,7 @@ export default function App() {
             <Route path="matricula/:id" element={<RecepcaoMatricula />} />
             <Route path="checkin" element={<RecepcaoCheckin />} />
             <Route path="pagamentos" element={<RecepcaoPagamentos />} />
+            <Route path="perfil" element={<MeuPerfil />} />
           </Route>
 
           <Route
@@ -114,9 +119,11 @@ export default function App() {
             <Route path="pagamentos" element={<RecepcaoPagamentos />} />
             <Route path="treinos" element={<InstrutorAlunos />} />
             <Route path="treinos/:id" element={<InstrutorAlunoDetalhe />} />
+            <Route path="perfil" element={<MeuPerfil />} />
           </Route>
         </Routes>
       </StoreProvider>
+      </FotoPerfilProvider>
       </AuthProvider>
     </ToastProvider>
   );

@@ -1,7 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Lock } from "lucide-react";
 import { useToast } from "../components/Toast";
 import { useAuth } from "../auth/AuthContext";
+import { useFotoPerfil } from "../auth/FotoPerfil";
+import Avatar from "../components/Avatar";
+import TrocarFotoModal from "../components/TrocarFotoModal";
 import { useAlunoLogado } from "../data/useAlunoLogado";
 import { MATRICULA_LINHAS } from "../data/aluno";
 import { formatarDataBr } from "../lib/pessoa";
@@ -10,9 +13,31 @@ export default function AlunoPerfil() {
   const toast = useToast();
   const { user } = useAuth();
   const aluno = useAlunoLogado();
+  const foto = useFotoPerfil();
+  const [trocandoFoto, setTrocandoFoto] = useState(false);
 
   const [telefone, setTelefone] = useState(aluno?.tel ?? "");
   const [email, setEmail] = useState(aluno?.email ?? "");
+
+  // o que foi salvo na nuvem (DynamoDB) vale mais que os dados de demonstração
+  useEffect(() => {
+    if (!foto.perfil) return;
+    if (foto.perfil.telefone !== undefined) setTelefone(foto.perfil.telefone);
+    if (foto.perfil.emailContato !== undefined) setEmail(foto.perfil.emailContato);
+  }, [foto.perfil]);
+
+  async function salvarDados() {
+    if (!foto.configurado) {
+      toast("O envio de dados não está configurado neste ambiente.");
+      return;
+    }
+    try {
+      await foto.salvarDados({ telefone, emailContato: email });
+      toast("Dados de contato atualizados.");
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Não foi possível salvar os dados.");
+    }
+  }
 
   const nome = aluno?.nome ?? user?.nome ?? "";
   const iniciais = nome
@@ -22,6 +47,14 @@ export default function AlunoPerfil() {
     .join("")
     .toUpperCase();
   const e = aluno?.endereco;
+
+  function abrirTrocaDeFoto() {
+    if (!foto.configurado) {
+      toast("O envio de foto não está configurado neste ambiente.");
+      return;
+    }
+    setTrocandoFoto(true);
+  }
 
   // somente leitura: dados de identificação não são alterados pelo próprio aluno
   const dadosPessoais = [
@@ -34,15 +67,17 @@ export default function AlunoPerfil() {
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
       <div className="rounded-2xl border border-navy/10 bg-white p-[22px]">
         <div className="flex items-center gap-3.5">
-          <div className="font-display flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-navy text-2xl font-bold text-neon">
-            {iniciais}
-          </div>
+          <Avatar
+            url={foto.url}
+            iniciais={iniciais}
+            className="font-display h-16 w-16 bg-navy text-2xl font-bold text-neon"
+          />
           <div>
             <div className="text-[17px] font-bold text-navy">{nome}</div>
             <div className="text-[13px] text-navy/55">{aluno?.email}</div>
             <button
               type="button"
-              onClick={() => toast("Upload de foto vai para o S3 (dados de mídia).")}
+              onClick={abrirTrocaDeFoto}
               className="mt-1.5 text-xs font-bold text-teal-mid"
             >
               Trocar foto
@@ -54,7 +89,7 @@ export default function AlunoPerfil() {
           className="mt-[22px] flex flex-col gap-3.5"
           onSubmit={(ev) => {
             ev.preventDefault();
-            toast("Dados de contato atualizados.");
+            void salvarDados();
           }}
         >
           <label className="flex flex-col gap-1.5 text-sm font-semibold text-navy">
@@ -83,9 +118,10 @@ export default function AlunoPerfil() {
           </label>
           <button
             type="submit"
-            className="rounded-[10px] bg-navy py-3 text-sm font-bold text-white transition hover:bg-navy-hover"
+            disabled={foto.salvando}
+            className="rounded-[10px] bg-navy py-3 text-sm font-bold text-white transition hover:bg-navy-hover disabled:opacity-60"
           >
-            Salvar alterações
+            {foto.salvando ? "Salvando…" : "Salvar alterações"}
           </button>
         </form>
       </div>
@@ -139,6 +175,10 @@ export default function AlunoPerfil() {
           alterados pela recepção ou administração. Telefone e e-mail você atualiza ao lado.
         </p>
       </div>
+
+      {trocandoFoto && (
+        <TrocarFotoModal iniciais={iniciais} onClose={() => setTrocandoFoto(false)} />
+      )}
     </div>
   );
 }

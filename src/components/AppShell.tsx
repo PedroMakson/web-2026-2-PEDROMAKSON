@@ -2,6 +2,8 @@ import { type ReactNode, useEffect, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { Bell, ChevronLeft, ChevronRight, LogOut, Menu, X } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
+import { useFotoPerfil } from "../auth/FotoPerfil";
+import Avatar from "./Avatar";
 import ChatBubble from "./ChatBubble";
 
 export type MenuItem = {
@@ -47,6 +49,7 @@ export default function AppShell({
 }: AppShellProps) {
   const navigate = useNavigate();
   const { user, sair } = useAuth();
+  const foto = useFotoPerfil();
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -131,9 +134,11 @@ export default function AppShell({
           title={user?.nome}
           className={`mt-[22px] flex shrink-0 items-center gap-2.5 rounded-xl bg-white/10 p-2.5 ${collapsed ? "md:justify-center md:p-2" : ""}`}
         >
-          <div className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full bg-teal text-[13px] font-bold text-navy-dark">
-            {user?.iniciais}
-          </div>
+          <Avatar
+            url={foto.url}
+            iniciais={user?.iniciais}
+            className="h-[34px] w-[34px] bg-teal text-[13px] font-bold text-navy-dark"
+          />
           <div className={`min-w-0 ${collapsed ? "md:hidden" : ""}`}>
             <div className="truncate text-[13px] font-bold text-white">
               {user?.nome}

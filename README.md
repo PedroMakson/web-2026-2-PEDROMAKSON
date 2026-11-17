@@ -66,6 +66,39 @@ Regras:
 
 Como os dados são de demonstração, o "hoje" é fixo em 14/09/2026 (`HOJE_DEMO`, em `src/lib/datas.ts`).
 
+## Perfil do usuário (S3 + DynamoDB + HTTP API + Lambda)
+
+Todos os perfis (Aluno, Instrutor, Recepção e Administrador) têm o item **Meu perfil** no menu (`/aluno/perfil`, `/instrutor/perfil`, `/recepcao/perfil`, `/admin/perfil`). Nele, o usuário altera telefone e e-mail de contato ("Salvar alterações") e a foto ("Trocar foto"). O botão
+abre a janela "Foto de perfil": a imagem atual fica no centro e "Selecionar imagem" abre o seletor de arquivos. A
+escolha aparece como prévia na própria janela e só é enviada ao clicar em "Confirmar" ("Cancelar" descarta). A foto
+exibida segue a ordem: foto enviada (S3), foto do login com Google (se o Cognito a repassar) e, por fim, as iniciais.
+
+Recursos AWS (região `us-east-1`, criados pelo console):
+
+| Recurso | Nome | Uso |
+|---|---|---|
+| Bucket S3 | `pedromaksonfontesdacosta-profile-2026.2` | fotos em `profile/<sub>.<jpg, png ou webp>`; privado, acesso público bloqueado |
+| Tabela DynamoDB | `pedromaksonfontesdacosta-message-2026.2` | um item por usuário (chave `userId` = `sub` do Cognito) com telefone, e-mail de contato e chave da foto |
+| Lambda | `pedromaksonfontesdacosta-profile` | código em `backend/perfil/index.mjs`; variáveis `BUCKET` e `TABLE`; usa a `LabRole` |
+| HTTP API | `pedromaksonfontesdacosta-profile-api` | rotas `PUT /profile` e `GET /profile`, JWT authorizer do Cognito e CORS |
+
+Fluxo:
+
+1. O navegador reduz a imagem (lado maior de 512 px, JPEG) e chama `PUT /profile` com JSON
+   (`telefone`, `emailContato` e/ou `foto.dados` em base64) e `Authorization: Bearer <ID token do Cognito>`.
+2. O **JWT authorizer** valida o token (emissor = user pool, audience = app client). Sem token válido, 401.
+3. A Lambda confere o formato pelo conteúdo (JPEG, PNG ou WebP), limita a foto a 3 MB, grava a imagem no S3 e o item no
+   DynamoDB. Como o `sub` vem do token, ninguém lê nem altera o perfil de outro usuário.
+4. `GET /profile` devolve o item do DynamoDB e a foto do S3. O app chama o GET ao entrar e depois de cada envio.
+
+O nome do bucket tem ponto, então o cliente S3 da Lambda usa `forcePathStyle`.
+
+Teste da Lambda sem a AWS: `node --test test/` em `backend/perfil`.
+
+Variável do front (`.env.local` e Amplify, em Hospedagem → Variáveis de ambiente): `VITE_PROFILE_API_URL` com o
+endereço base da API (sem `/profile`). Sem ela, o "Trocar foto" e o "Salvar alterações" avisam que o envio não está
+configurado neste ambiente.
+
 ## Autenticação
 
 O login usa o Amazon Cognito (User Pool). Os perfis são grupos do Cognito (`Aluno`, `Instrutor`, `Recepcionista`, `Administrador`) e cada área do sistema só abre para o perfil correspondente.

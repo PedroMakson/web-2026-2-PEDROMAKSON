@@ -27,6 +27,8 @@ export type AuthUser = {
   email: string;
   perfil: Perfil;
   iniciais: string;
+  // foto vinda do login federado (Google), quando o Cognito a repassa no token
+  picture?: string;
 };
 
 type AuthValue = {
@@ -57,7 +59,8 @@ async function carregarUsuario(): Promise<AuthUser | null> {
     .map((p) => p[0])
     .join("")
     .toUpperCase();
-  return { nome, email, perfil, iniciais };
+  const picture = typeof payload.picture === "string" && payload.picture ? payload.picture : undefined;
+  return { nome, email, perfil, iniciais, picture };
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {

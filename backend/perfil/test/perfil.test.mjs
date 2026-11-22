@@ -183,6 +183,90 @@ describe("/profile", () => {
     assert.equal(amb.itens.get(SUB_A).telefone, "");
   });
 
+  it("PUT guarda nascimento, sexo e endereço (CEP normalizado) e GET devolve", async () => {
+    const amb = ambiente();
+    const h = criarHandler(amb.adaptadores);
+    const r = await h(
+      evento("PUT", {
+        corpo: {
+          nascimento: "2001-05-14",
+          sexo: "Masculino",
+          endereco: {
+            cep: "59900000",
+            logradouro: " Rua das Flores ",
+            numero: "120",
+            complemento: "",
+            bairro: "Centro",
+            cidade: "Pau dos Ferros",
+            uf: "RN",
+          },
+        },
+      }),
+    );
+    assert.equal(r.statusCode, 200);
+    const item = amb.itens.get(SUB_A);
+    assert.equal(item.nascimento, "2001-05-14");
+    assert.equal(item.sexo, "Masculino");
+    assert.equal(item.cep, "59900-000");
+    assert.equal(item.logradouro, "Rua das Flores");
+    assert.equal(item.complemento, "");
+    assert.equal(item.uf, "RN");
+    const get = JSON.parse((await h(evento("GET"))).body);
+    assert.equal(get.perfil.cidade, "Pau dos Ferros");
+  });
+
+  it("alterar o endereço não apaga telefone nem foto já guardados", async () => {
+    const amb = ambiente();
+    const h = criarHandler(amb.adaptadores);
+    await h(evento("PUT", { corpo: { telefone: "111", foto: foto(PNG) } }));
+    await h(
+      evento("PUT", {
+        corpo: { endereco: { cep: "59900-000", logradouro: "Rua A", numero: "S/N", bairro: "B", cidade: "C", uf: "RN" } },
+      }),
+    );
+    assert.equal(amb.itens.get(SUB_A).telefone, "111");
+    assert.equal(amb.itens.get(SUB_A).fotoKey, `profile/${SUB_A}.png`);
+  });
+
+  it("valida nascimento, sexo e endereço (400)", async () => {
+    const h = criarHandler(ambiente().adaptadores);
+    const endOk = { cep: "59900-000", logradouro: "Rua A", numero: "1", bairro: "B", cidade: "C", uf: "RN" };
+    for (const corpo of [
+      { nascimento: "31/02/2001" },
+      { nascimento: "2001-02-31" },
+      { nascimento: "1899-12-31" },
+      { nascimento: "2999-01-01" },
+      { nascimento: "" },
+      { sexo: "Robô" },
+      { sexo: 1 },
+      { endereco: "Rua A" },
+      { endereco: { ...endOk, cep: "123" } },
+      { endereco: { ...endOk, logradouro: "  " } },
+      { endereco: { ...endOk, numero: "" } },
+      { endereco: { ...endOk, uf: "XX" } },
+      { endereco: { ...endOk, complemento: "x".repeat(61) } },
+      { endereco: { ...endOk, cidade: 7 } },
+    ]) {
+      const r = await h(evento("PUT", { corpo }));
+      assert.equal(r.statusCode, 400, `corpo ${JSON.stringify(corpo)}`);
+    }
+  });
+
+  it("aceita sexo vazio e complemento ausente", async () => {
+    const amb = ambiente();
+    const h = criarHandler(amb.adaptadores);
+    const r = await h(
+      evento("PUT", {
+        corpo: {
+          sexo: "",
+          endereco: { cep: "59900-000", logradouro: "Rua A", numero: "1", bairro: "B", cidade: "C", uf: "RN" },
+        },
+      }),
+    );
+    assert.equal(r.statusCode, 200);
+    assert.equal(amb.itens.get(SUB_A).complemento, "");
+  });
+
   it("405 para outros métodos", async () => {
     const h = criarHandler(ambiente().adaptadores);
     assert.equal((await h(evento("POST", { corpo: {} }))).statusCode, 405);

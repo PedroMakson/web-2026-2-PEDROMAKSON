@@ -29,6 +29,8 @@ export type AuthUser = {
   iniciais: string;
   // foto vinda do login federado (Google), quando o Cognito a repassa no token
   picture?: string;
+  // entrou pelo Google: a senha é da conta Google, não do Cognito
+  federado: boolean;
 };
 
 type AuthValue = {
@@ -60,7 +62,9 @@ async function carregarUsuario(): Promise<AuthUser | null> {
     .join("")
     .toUpperCase();
   const picture = typeof payload.picture === "string" && payload.picture ? payload.picture : undefined;
-  return { nome, email, perfil, iniciais, picture };
+  const federado =
+    Array.isArray(payload.identities) || String(payload["cognito:username"] ?? "").startsWith("google_");
+  return { nome, email, perfil, iniciais, picture, federado };
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {

@@ -40,3 +40,22 @@ body {
     transform: scale(1.06);
   }
 }
+
+/* Tailwind v4 deixa os botões com a seta normal: devolve a mãozinha em tudo que é clicável */
+@layer base {
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  summary,
+  select:not(:disabled),
+  input[type="checkbox"]:not(:disabled),
+  input[type="radio"]:not(:disabled),
+  input[type="file"]:not(:disabled),
+  label[for] {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  [aria-disabled="true"] {
+    cursor: not-allowed;
+  }
+}

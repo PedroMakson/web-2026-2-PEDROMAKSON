@@ -17,7 +17,7 @@ Sistema de gestão de academia desenvolvido como projeto da disciplina de Desenv
 - [React Router v6](https://reactrouter.com/)
 - [lucide-react](https://lucide.dev/) para ícones
 
-Os dados são simulados em memória (`src/data/store.tsx`), sem backend — o objetivo é demonstrar a interface e as regras de negócio da aplicação.
+Os dados de alunos, equipe, planos, pagamentos, check-ins e acompanhamento são simulados em memória (`src/data/store.tsx`) — o objetivo é demonstrar a interface e as regras de negócio. Já na nuvem estão o login (Cognito), o assistente de chat e o **perfil do usuário** (foto no S3, dados no DynamoDB). As tabelas DynamoDB para persistir o restante estão descritas em [`docs/modelo-de-dados.md`](docs/modelo-de-dados.md) e são criadas por `backend/dados/criar-tabelas.sh`.
 
 ## Dados cadastrais e endereço
 
@@ -68,7 +68,7 @@ Como os dados são de demonstração, o "hoje" é fixo em 14/09/2026 (`HOJE_DEMO
 
 ## Perfil do usuário (S3 + DynamoDB + HTTP API + Lambda)
 
-Todos os perfis (Aluno, Instrutor, Recepção e Administrador) têm o item **Meu perfil** no menu (`/aluno/perfil`, `/instrutor/perfil`, `/recepcao/perfil`, `/admin/perfil`). Nele, o usuário altera telefone e e-mail de contato ("Salvar alterações") e a foto ("Trocar foto"). O botão
+Todos os perfis (Aluno, Instrutor, Recepção e Administrador) têm o item **Meu perfil** no menu (`/aluno/perfil`, `/instrutor/perfil`, `/recepcao/perfil`, `/admin/perfil`), montado pelo componente `src/components/PerfilCard.tsx`. Nele o usuário altera a foto ("Trocar foto") e os dados pessoais e de contato: telefone, e-mail de contato, data de nascimento, sexo e endereço (com o CEP preenchendo o endereço). Os campos abrem **travados**; o botão **Editar** libera todos, **menos o CPF**, que só a recepção ou a administração altera. Ao editar aparecem "Cancelar" e "Salvar alterações". A **senha** tem o botão "Alterar senha" (senha atual + nova, ou "Esqueci minha senha atual" com código por e-mail); para quem entrou com o Google o botão não aparece, porque a senha é da conta Google. O botão
 abre a janela "Foto de perfil": a imagem atual fica no centro e "Selecionar imagem" abre o seletor de arquivos. A
 escolha aparece como prévia na própria janela e só é enviada ao clicar em "Confirmar" ("Cancelar" descarta). A foto
 exibida segue a ordem: foto enviada (S3), foto do login com Google (se o Cognito a repassar) e, por fim, as iniciais.
@@ -85,9 +85,9 @@ Recursos AWS (região `us-east-1`, criados pelo console):
 Fluxo:
 
 1. O navegador reduz a imagem (lado maior de 512 px, JPEG) e chama `PUT /profile` com JSON
-   (`telefone`, `emailContato` e/ou `foto.dados` em base64) e `Authorization: Bearer <ID token do Cognito>`.
+   (`telefone`, `emailContato`, `nascimento`, `sexo`, `endereco` e/ou `foto.dados` em base64) e `Authorization: Bearer <ID token do Cognito>`.
 2. O **JWT authorizer** valida o token (emissor = user pool, audience = app client). Sem token válido, 401.
-3. A Lambda confere o formato pelo conteúdo (JPEG, PNG ou WebP), limita a foto a 3 MB, grava a imagem no S3 e o item no
+3. A Lambda valida os campos (telefone, e-mail, nascimento, sexo e endereço), confere o formato da foto pelo conteúdo (JPEG, PNG ou WebP), limita a foto a 3 MB, grava a imagem no S3 e o item no
    DynamoDB. Como o `sub` vem do token, ninguém lê nem altera o perfil de outro usuário.
 4. `GET /profile` devolve o item do DynamoDB e a foto do S3. O app chama o GET ao entrar e depois de cada envio.
 
@@ -160,4 +160,9 @@ src/
   data/         store global (mock) e dados estáticos
   layouts/      layouts por perfil (Aluno, Instrutor, Recepção, Admin)
   pages/        telas de cada perfil
+backend/
+  perfil/       Lambda do PUT/GET /profile (S3 + DynamoDB) e seus testes
+  dados/        script que cria as tabelas DynamoDB do projeto
+  chat.mjs, authorizer.mjs, conhecimento.mjs   assistente de chat (Lambdas e base de conhecimento)
+docs/           modelo de dados (DynamoDB)
 ```

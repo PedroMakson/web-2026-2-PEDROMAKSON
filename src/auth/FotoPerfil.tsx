@@ -8,7 +8,13 @@ import {
   useState,
 } from "react";
 import { useAuth } from "./AuthContext";
-import { buscarPerfil, fotoConfigurada, type PerfilSalvo, salvarPerfil } from "../lib/fotoApi";
+import {
+  buscarPerfil,
+  type DadosPerfil,
+  fotoConfigurada,
+  type PerfilSalvo,
+  salvarPerfil,
+} from "../lib/fotoApi";
 import { reduzirImagem, validarArquivo } from "../lib/imagem";
 
 type PerfilUsuarioValor = {
@@ -21,8 +27,8 @@ type PerfilUsuarioValor = {
   configurado: boolean;
   // valida, reduz, envia (PUT) e lê de volta (GET); lança Error com a mensagem para o usuário
   trocar: (arquivo: File) => Promise<void>;
-  // altera telefone e e-mail de contato (PUT); lança Error com a mensagem para o usuário
-  salvarDados: (dados: { telefone: string; emailContato: string }) => Promise<void>;
+  // altera telefone, e-mail de contato, nascimento, sexo e endereço (PUT); lança Error com a mensagem para o usuário
+  salvarDados: (dados: DadosPerfil) => Promise<void>;
 };
 
 const PerfilUsuarioContext = createContext<PerfilUsuarioValor | null>(null);
@@ -89,7 +95,7 @@ export function FotoPerfilProvider({ children }: { children: ReactNode }) {
     [aplicarFoto],
   );
 
-  const salvarDados = useCallback(async (dados: { telefone: string; emailContato: string }) => {
+  const salvarDados = useCallback(async (dados: DadosPerfil) => {
     setSalvando(true);
     try {
       setPerfil(await salvarPerfil(dados));

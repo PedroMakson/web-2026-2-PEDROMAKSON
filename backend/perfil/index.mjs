@@ -37,6 +37,45 @@ const BASE64 = /^[A-Za-z0-9+/]+={0,2}$/;
 const TELEFONE = /^[0-9+()\-\s.]{0,30}$/;
 const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/;
 
+const SEXOS = ["Feminino", "Masculino", "Outro", "Prefiro não informar"];
+const UFS = [
+  "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA",
+  "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO",
+];
+// tamanho máximo de cada campo do endereço
+const LIMITES_ENDERECO = { logradouro: 100, numero: 20, complemento: 60, bairro: 80, cidade: 80 };
+
+// AAAA-MM-DD de verdade (sem 31/02), entre 1900 e hoje
+function nascimentoValido(valor) {
+  if (typeof valor !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(valor)) return false;
+  const [a, m, d] = valor.split("-").map(Number);
+  const data = new Date(Date.UTC(a, m - 1, d));
+  if (data.getUTCFullYear() !== a || data.getUTCMonth() !== m - 1 || data.getUTCDate() !== d) return false;
+  return valor >= "1900-01-01" && valor <= new Date().toISOString().slice(0, 10);
+}
+
+// Confere o endereço e devolve { endereco } já limpo (CEP como 00000-000) ou { erro } com a mensagem.
+function normalizarEndereco(e) {
+  if (!e || typeof e !== "object" || Array.isArray(e)) return { erro: "Endereço inválido." };
+  const limpo = {};
+  for (const campo of ["logradouro", "numero", "complemento", "bairro", "cidade"]) {
+    const valor = e[campo] ?? "";
+    if (typeof valor !== "string") return { erro: "Endereço inválido." };
+    limpo[campo] = valor.trim();
+    if (limpo[campo].length > LIMITES_ENDERECO[campo]) return { erro: `Endereço: ${campo} muito longo.` };
+  }
+  const digitos = typeof e.cep === "string" ? e.cep.replace(/\D/g, "") : "";
+  if (digitos.length !== 8) return { erro: "CEP inválido: informe 8 dígitos." };
+  limpo.cep = `${digitos.slice(0, 5)}-${digitos.slice(5)}`;
+  if (!limpo.logradouro) return { erro: "Informe o logradouro." };
+  if (!limpo.numero) return { erro: "Informe o número do endereço (ou S/N)." };
+  if (!limpo.bairro) return { erro: "Informe o bairro." };
+  if (!limpo.cidade) return { erro: "Informe a cidade." };
+  if (!UFS.includes(e.uf)) return { erro: "UF inválida." };
+  limpo.uf = e.uf;
+  return { endereco: limpo };
+}
+
 // `perfis` isola o DynamoDB: { ler(userId) -> item | null, guardar(item) }.
 // `fotos` isola o S3: { guardar(chave, corpo, tipo), ler(chave) -> { corpo, tipo } | null, remover(chave) }.
 export function criarHandler({ perfis, fotos }, { maxFotoBytes = MAX_FOTO_BYTES } = {}) {
@@ -73,7 +112,7 @@ export function criarHandler({ perfis, fotos }, { maxFotoBytes = MAX_FOTO_BYTES 
           return json(400, { message: "Corpo inválido: envie um JSON." });
         }
 
-        const { telefone, emailContato, foto } = dados;
+        const { telefone, emailContato, foto, nascimento, sexo, endereco } = dados;
         if (telefone !== undefined && (typeof telefone !== "string" || !TELEFONE.test(telefone.trim()))) {
           return json(400, { message: "Telefone inválido." });
         }
@@ -83,8 +122,25 @@ export function criarHandler({ perfis, fotos }, { maxFotoBytes = MAX_FOTO_BYTES 
         ) {
           return json(400, { message: "E-mail de contato inválido." });
         }
-        if (telefone === undefined && emailContato === undefined && foto === undefined) {
-          return json(400, { message: "Envie ao menos um campo para atualizar (telefone, emailContato ou foto)." });
+        if (nascimento !== undefined && !nascimentoValido(nascimento)) {
+          return json(400, { message: "Data de nascimento inválida." });
+        }
+        if (sexo !== undefined && (typeof sexo !== "string" || (sexo !== "" && !SEXOS.includes(sexo)))) {
+          return json(400, { message: "Sexo inválido." });
+        }
+        let enderecoLimpo = null;
+        if (endereco !== undefined) {
+          const resultado = normalizarEndereco(endereco);
+          if (resultado.erro) return json(400, { message: resultado.erro });
+          enderecoLimpo = resultado.endereco;
+        }
+        if (
+          [telefone, emailContato, foto, nascimento, sexo, endereco].every((campo) => campo === undefined)
+        ) {
+          return json(400, {
+            message:
+              "Envie ao menos um campo para atualizar (telefone, emailContato, nascimento, sexo, endereco ou foto).",
+          });
         }
 
         let imagem = null;
@@ -115,6 +171,10 @@ export function criarHandler({ perfis, fotos }, { maxFotoBytes = MAX_FOTO_BYTES 
         };
         if (telefone !== undefined) novo.telefone = telefone.trim();
         if (emailContato !== undefined) novo.emailContato = emailContato.trim();
+        if (nascimento !== undefined) novo.nascimento = nascimento;
+        if (sexo !== undefined) novo.sexo = sexo;
+        // o endereço é guardado em atributos de texto soltos (cep, logradouro, numero, ...)
+        if (enderecoLimpo) Object.assign(novo, enderecoLimpo);
 
         if (imagem) {
           // uma foto por usuário: a chave leva o sub, então ninguém lê nem troca a de outro

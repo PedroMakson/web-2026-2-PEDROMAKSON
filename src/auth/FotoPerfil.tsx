@@ -38,6 +38,8 @@ export function FotoPerfilProvider({ children }: { children: ReactNode }) {
   const email = user?.email;
   const [urlS3, setUrlS3] = useState<string | null>(null);
   const [perfil, setPerfil] = useState<PerfilSalvo | null>(null);
+  // false enquanto o GET /profile não respondeu: até lá não se sabe qual é a foto do usuário
+  const [carregado, setCarregado] = useState(false);
   const [enviando, setEnviando] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const urlAtual = useRef<string | null>(null);
@@ -54,9 +56,11 @@ export function FotoPerfilProvider({ children }: { children: ReactNode }) {
     if (!fotoConfigurada || !email) {
       aplicarFoto(null);
       setPerfil(null);
+      setCarregado(true);
       return;
     }
     let ativo = true;
+    setCarregado(false);
     buscarPerfil()
       .then((r) => {
         if (!ativo) return;
@@ -65,6 +69,9 @@ export function FotoPerfilProvider({ children }: { children: ReactNode }) {
       })
       .catch(() => {
         // API fora do ar: o app segue com os dados locais e as iniciais
+      })
+      .finally(() => {
+        if (ativo) setCarregado(true);
       });
     return () => {
       ativo = false;
@@ -107,7 +114,8 @@ export function FotoPerfilProvider({ children }: { children: ReactNode }) {
   return (
     <PerfilUsuarioContext.Provider
       value={{
-        url: urlS3 ?? user?.picture ?? null,
+        // a foto do Google só entra depois de confirmar que não há foto enviada; antes disso, iniciais
+        url: carregado ? (urlS3 ?? user?.picture ?? null) : urlS3,
         perfil,
         enviando,
         salvando,

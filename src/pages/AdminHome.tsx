@@ -2,54 +2,41 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { FileText } from "lucide-react";
 import { useStore } from "../data/store";
-import { HOJE_DEMO, somarDias } from "../lib/datas";
+import { brl } from "../data/store";
+import { indicadoresDoPeriodo, percentual } from "../lib/indicadores";
 
 const PERIODOS = ["7 dias", "30 dias", "90 dias"] as const;
 type Periodo = (typeof PERIODOS)[number];
+const DIAS: Record<Periodo, number> = { "7 dias": 7, "30 dias": 30, "90 dias": 90 };
 
-const DADOS: Record<Periodo, { receita: string; inad: string; matriculas: string; freq: string; dR: string; dI: string; dM: string }> = {
-  "7 dias": { receita: "R$ 12.480", inad: "4,1%", matriculas: "9", freq: "3,4", dR: "+6,2% vs. semana anterior", dI: "-0,4 p.p.", dM: "+2 novas" },
-  "30 dias": { receita: "R$ 48.930", inad: "5,8%", matriculas: "34", freq: "3,1", dR: "+9,4% vs. mês anterior", dI: "+0,7 p.p.", dM: "+11 novas" },
-  "90 dias": { receita: "R$ 141.200", inad: "6,3%", matriculas: "88", freq: "2,9", dR: "+14,1% vs. trimestre anterior", dI: "-1,1 p.p.", dM: "+23 novas" },
-};
-
-const RECEITA_VALS: Record<Periodo, number[]> = {
-  "7 dias": [7.8, 9.1, 8.4, 10.2, 11.6, 12.4],
-  "30 dias": [38.4, 41.2, 39.8, 44.6, 46.1, 48.9],
-  "90 dias": [112, 118, 121, 130, 136, 141],
-};
-const MESES = ["abr", "mai", "jun", "jul", "ago", "set"];
-
-const FAIXAS = [
-  { faixa: "06h – 09h", valor: "31%", pct: 31, cor: "bg-teal" },
-  { faixa: "09h – 12h", valor: "14%", pct: 14, cor: "bg-teal/60" },
-  { faixa: "16h – 19h", valor: "38%", pct: 38, cor: "bg-navy" },
-  { faixa: "19h – 22h", valor: "17%", pct: 17, cor: "bg-teal/60" },
-];
+const CORES_FAIXA = ["bg-teal", "bg-teal/60", "bg-navy/70", "bg-navy", "bg-teal/60", "bg-navy/30"];
 
 export default function AdminHome() {
   const navigate = useNavigate();
-  const { checkins } = useStore();
+  const { alunos, planos, pagamentos, checkins, matriculas } = useStore();
   const [periodo, setPeriodo] = useState<Periodo>("30 dias");
-  const d = DADOS[periodo];
-  const rv = RECEITA_VALS[periodo];
-  const max = Math.max(...rv);
-  const unidade = periodo === "90 dias" ? "k" : "R$ ";
+  const dias = DIAS[periodo];
+  const ind = indicadoresDoPeriodo({ alunos, planos, pagamentos, checkins, matriculas }, dias);
+  const rv = ind.serie;
+  const max = Math.max(1, ...rv.map((v) => v.valor));
+  const porSemana = dias <= 7;
 
-  // check-ins por origem nos últimos 30 dias (a partir do "hoje" da demonstração)
-  const desde = somarDias(HOJE_DEMO, -30);
-  const recentes = checkins.filter((c) => !c.cancelado && c.data > desde && c.data <= HOJE_DEMO);
-  const porOrigem = (["App", "Recepção", "Retroativo"] as const).map((origem) => ({
-    origem,
-    total: recentes.filter((c) => c.origem === origem).length,
-  }));
-  const totalOrigens = Math.max(1, recentes.length);
+  const porOrigem = ind.origens;
+  const totalOrigens = Math.max(1, ind.totalCheckins);
 
   const kpis = [
-    { label: "Receita", valor: d.receita, delta: d.dR, destaque: true },
-    { label: "Inadimplência", valor: d.inad, delta: d.dI },
-    { label: "Matrículas", valor: d.matriculas, delta: d.dM },
-    { label: "Frequência média", valor: d.freq, delta: "check-ins/aluno" },
+    { label: "Receita", valor: ind.receitaTexto, delta: ind.receitaDelta, destaque: true },
+    {
+      label: "Inadimplência",
+      valor: percentual(ind.inadimplencia.taxa),
+      delta: `${ind.inadimplenciaDelta} · ${brl(ind.inadimplencia.emAtraso)} em atraso`,
+    },
+    {
+      label: "Matrículas",
+      valor: String(ind.matriculas.ativas.length),
+      delta: `+${ind.matriculas.novas.length} novas · ${ind.matriculas.renovacoes.length} renovação(ões) · ${ind.matriculas.cancelamentos.length} cancelada(s)`,
+    },
+    { label: "Frequência média", valor: ind.frequenciaMedia.toFixed(1).replace(".", ","), delta: "check-ins/aluno por semana" },
   ];
 
   return (
@@ -116,23 +103,19 @@ export default function AdminHome() {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <div className="rounded-2xl border border-navy/10 bg-white p-[22px]">
           <div className="text-[11px] font-bold uppercase tracking-wider text-navy/45">
-            Receita por mês
+            Receita por {porSemana ? "semana" : "mês"}
           </div>
           <div className="mt-5 flex items-end gap-3">
             {rv.map((v, i) => (
               <div key={i} className="flex flex-1 flex-col items-center gap-2">
-                <div className="text-center text-[11px] font-bold text-navy/60">
-                  {unidade}
-                  {v}
-                  {unidade === "k" ? "" : "k"}
-                </div>
+                <div className="text-center text-[11px] font-bold text-navy/60">{brl(v.valor).replace(",00", "")}</div>
                 <div className="flex h-[110px] w-full items-end">
                   <div
                     className={`w-full rounded-t-lg ${i === rv.length - 1 ? "bg-teal" : "bg-navy/[.18]"}`}
-                    style={{ height: `${Math.round((v / max) * 100)}%` }}
+                    style={{ height: `${Math.max(2, Math.round((v.valor / max) * 100))}%` }}
                   />
                 </div>
-                <div className="text-center text-[11px] text-navy/45">{MESES[i]}</div>
+                <div className="text-center text-[11px] text-navy/45">{v.rotulo}</div>
               </div>
             ))}
           </div>
@@ -143,14 +126,14 @@ export default function AdminHome() {
             Frequência por faixa de horário
           </div>
           <div className="mt-[18px] flex flex-col gap-3">
-            {FAIXAS.map((f) => (
+            {ind.faixas.map((f, i) => (
               <div key={f.faixa}>
                 <div className="flex justify-between text-[13px] font-semibold">
                   <span>{f.faixa}</span>
-                  <span className="text-navy/55">{f.valor}</span>
+                  <span className="text-navy/55">{f.pct}%</span>
                 </div>
                 <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-navy/[.08]">
-                  <div className={`h-full ${f.cor}`} style={{ width: `${f.pct}%` }} />
+                  <div className={`h-full ${CORES_FAIXA[i % CORES_FAIXA.length]}`} style={{ width: `${f.pct}%` }} />
                 </div>
               </div>
             ))}
@@ -160,7 +143,7 @@ export default function AdminHome() {
 
       <div className="rounded-2xl border border-navy/10 bg-white p-[22px]">
         <div className="text-[11px] font-bold uppercase tracking-wider text-navy/45">
-          Check-ins por origem — últimos 30 dias
+          Check-ins por origem — {periodo === "7 dias" ? "últimos 7 dias" : periodo === "30 dias" ? "últimos 30 dias" : "últimos 90 dias"}
         </div>
         <div className="mt-[18px] flex flex-col gap-3">
           {porOrigem.map((o) => (

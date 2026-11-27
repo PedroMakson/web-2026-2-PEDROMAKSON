@@ -1,19 +1,28 @@
 import { useNavigate } from "react-router-dom";
 import { useStore } from "../data/store";
 import { useAuth } from "../auth/AuthContext";
+import { HOJE_DEMO, somarDias } from "../lib/datas";
 
 export default function InstrutorHome() {
   const navigate = useNavigate();
-  const { alunos } = useStore();
+  const { alunos, avaliacoes } = useStore();
   const { user } = useAuth();
 
   const meusAlunos = alunos.filter((a) => user?.perfil !== "Instrutor" || a.instrutor === user.nome);
   const precisamAtencao = meusAlunos.filter((a) => a.alerta);
 
+  // avaliações do mês corrente e alunos sem avaliação nos últimos 60 dias (reavaliação a agendar)
+  const ids = new Set(meusAlunos.map((a) => a.id));
+  const doMes = avaliacoes.filter((v) => ids.has(v.alunoId) && v.data.startsWith(HOJE_DEMO.slice(0, 7))).length;
+  const limite = somarDias(HOJE_DEMO, -60);
+  const aReavaliar = meusAlunos.filter(
+    (a) => !avaliacoes.some((v) => v.alunoId === a.id && v.data > limite),
+  ).length;
+
   const kpis = [
-    { label: "Alunos vinculados", valor: meusAlunos.length, sub: "todos da unidade Centro" },
+    { label: "Alunos vinculados", valor: meusAlunos.length, sub: "sob a sua orientação" },
     { label: "Precisam de atenção", valor: precisamAtencao.length, sub: "sem check-in ou treino vencido" },
-    { label: "Avaliações do mês", valor: "4", sub: "2 agendadas" },
+    { label: "Avaliações do mês", valor: doMes, sub: `${aReavaliar} para reavaliar (60+ dias)` },
   ];
 
   return (

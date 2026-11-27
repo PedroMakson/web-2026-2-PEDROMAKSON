@@ -1,6 +1,8 @@
 import { Outlet } from "react-router-dom";
 import { CheckCircle2, Home, User, Users, Wallet } from "lucide-react";
 import AppShell, { type MenuItem } from "../components/AppShell";
+import { useStore } from "../data/store";
+import { notificacoesDaRecepcao } from "../lib/notificacoes";
 
 const RECEPCAO_MENU: MenuItem[] = [
   {
@@ -19,35 +21,13 @@ const RECEPCAO_MENU: MenuItem[] = [
   { label: "Meu perfil", to: "/recepcao/perfil", icon: <User size={18} /> },
 ];
 
-const NOTIFICACOES_RECEPCAO = [
-  {
-    tipo: "Pagamento",
-    texto:
-      "Igor Bezerra está com a mensalidade vencida desde 05/09 — check-in bloqueado.",
-    quando: "há 1 h",
-    lida: false,
-  },
-  {
-    tipo: "Matrícula",
-    texto:
-      "3 matrículas vencem nos próximos 15 dias. Ofereça a renovação na recepção.",
-    quando: "hoje",
-    lida: false,
-  },
-  {
-    tipo: "Movimento",
-    texto: "42 check-ins registrados hoje, 8 pela recepção.",
-    quando: "há 4 h",
-    lida: true,
-  },
-];
-
 export default function RecepcaoLayout() {
+  const { alunos, pagamentos } = useStore();
   return (
     <AppShell
       menuItems={RECEPCAO_MENU}
       roleLabel="Recepcionista"
-      notifications={NOTIFICACOES_RECEPCAO}
+      notifications={notificacoesDaRecepcao(alunos, pagamentos)}
       notifFooter="Alertas operacionais do perfil Recepcionista, gerados pelo job diário (RF22–RF24)."
     >
       <Outlet />

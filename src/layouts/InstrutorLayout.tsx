@@ -1,6 +1,8 @@
 import { Outlet } from "react-router-dom";
 import { Home, User, Users } from "lucide-react";
 import AppShell, { type MenuItem } from "../components/AppShell";
+import { useStore } from "../data/store";
+import { notificacoesDoInstrutor } from "../lib/notificacoes";
 
 const INSTRUTOR_MENU: MenuItem[] = [
   {
@@ -13,35 +15,13 @@ const INSTRUTOR_MENU: MenuItem[] = [
   { label: "Meu perfil", to: "/instrutor/perfil", icon: <User size={18} /> },
 ];
 
-const NOTIFICACOES_INSTRUTOR = [
-  {
-    tipo: "Aluno",
-    texto:
-      "Rafael Torres está há 9 dias sem check-in. Vale um contato de retomada.",
-    quando: "há 3 h",
-    lida: false,
-  },
-  {
-    tipo: "Avaliação",
-    texto:
-      "Avaliação física de Marcela Duarte vence este mês — agende a reavaliação.",
-    quando: "ontem",
-    lida: false,
-  },
-  {
-    tipo: "Treino",
-    texto: "O treino de Pedro Makson está sem atualização há 30 dias.",
-    quando: "há 2 dias",
-    lida: true,
-  },
-];
-
 export default function InstrutorLayout() {
+  const { alunos, avaliacoes } = useStore();
   return (
     <AppShell
       menuItems={INSTRUTOR_MENU}
       roleLabel="Instrutor"
-      notifications={NOTIFICACOES_INSTRUTOR}
+      notifications={notificacoesDoInstrutor(alunos, avaliacoes)}
       notifFooter="Alertas operacionais do perfil Instrutor, gerados pelo job diário (RF22–RF24)."
     >
       <Outlet />

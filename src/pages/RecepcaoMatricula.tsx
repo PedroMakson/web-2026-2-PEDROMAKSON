@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { Pencil, X } from "lucide-react";
-import { useStore } from "../data/store";
+import { proximaMatricula, useStore } from "../data/store";
 import { useToast } from "../components/Toast";
 import DadosPessoaisFields from "../components/DadosPessoaisFields";
 import EnderecoFields from "../components/EnderecoFields";
@@ -80,8 +80,9 @@ export default function RecepcaoMatricula() {
       cpf: pessoais.cpf,
       nascimento: pessoais.nascimento,
       sexo: pessoais.sexo,
-      fim: editando?.fim ?? "15/10/2026",
-      matricula: editando?.matricula ?? `#2026-0${Math.floor(100 + Math.random() * 900)}`,
+      fim: editando?.fim ?? "", // matrícula nova: a loja calcula pelo plano e pelo dia de vencimento
+      matricula: editando?.matricula ?? proximaMatricula(alunos),
+      diaVenc: editando ? undefined : diaVenc,
     });
     if (editando && trocandoPlano) {
       const r = trocarPlano(editando.id, plano, diaTroca, false);

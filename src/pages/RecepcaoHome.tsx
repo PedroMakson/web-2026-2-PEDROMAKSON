@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useStore } from "../data/store";
+import { brl, useStore } from "../data/store";
 import TrocaPlanoModal from "../components/TrocaPlanoModal";
 import { formatarDataBr } from "../lib/pessoa";
+import { HOJE_DEMO } from "../lib/datas";
+import { janela, matriculasNa } from "../lib/indicadores";
 
 function diasAte(fim: string) {
   const [d, m, a] = fim.split("/").map(Number);
@@ -13,7 +15,7 @@ function diasAte(fim: string) {
 
 export default function RecepcaoHome() {
   const navigate = useNavigate();
-  const { alunos, pagamentos, checkins } = useStore();
+  const { alunos, planos, pagamentos, checkins } = useStore();
 
   // os 5 check-ins mais recentes (retroativos aparecem pela data em que foram feitos)
   const recentes = checkins
@@ -35,20 +37,26 @@ export default function RecepcaoHome() {
   const vencendo = alunos
     .filter((a) => {
       const dias = diasAte(a.fim);
-      return dias >= -30 && dias <= 20;
+      return !a.cancelamento && dias >= 0 && dias <= 15;
     })
     .slice(0, 4);
 
+  // check-ins de hoje por origem e matrículas novas da semana, direto dos dados
+  const hoje = checkins.filter((c) => !c.cancelado && c.data === HOJE_DEMO);
+  const peloApp = hoje.filter((c) => c.origem === "App").length;
+  const pelaRecepcao = hoje.filter((c) => c.origem === "Recepção").length;
+  const novasNaSemana = matriculasNa(alunos, planos, janela(7)).novas.length;
+
   const kpis = [
-    { label: "Check-ins hoje", valor: "42", sub: "34 autoatendimento · 8 recepção" },
+    { label: "Check-ins hoje", valor: hoje.length, sub: `${peloApp} autoatendimento · ${pelaRecepcao} recepção` },
     {
       label: "Pagamentos pendentes",
       valor: pendentes.length,
-      sub: `R$ ${totalPendente.toFixed(2).replace(".", ",")} em aberto`,
+      sub: `${brl(totalPendente)} em aberto`,
       destaque: true,
     },
     { label: "Matrículas vencendo", valor: vencendo.length, sub: "próximos 15 dias" },
-    { label: "Novas matrículas", valor: "5", sub: "nesta semana" },
+    { label: "Novas matrículas", valor: novasNaSemana, sub: "nesta semana" },
   ];
 
   return (

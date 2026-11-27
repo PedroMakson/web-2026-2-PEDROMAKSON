@@ -163,6 +163,7 @@ src/
 backend/
   perfil/       Lambda do PUT/GET /profile (S3 + DynamoDB) e seus testes
   dados/        script que cria as tabelas DynamoDB do projeto
+  agente/       agente de IA em Python (Strands Agents + Gemini): lembra da conversa e informa a hora certa (NTP.br)
   chat.mjs, authorizer.mjs, conhecimento.mjs   assistente de chat (Lambdas e base de conhecimento)
 docs/           modelo de dados (DynamoDB)
 ```

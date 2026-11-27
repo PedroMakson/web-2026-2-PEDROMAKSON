@@ -6,11 +6,11 @@ import { useStore } from "../data/store";
 import { useAlunoLogado } from "../data/useAlunoLogado";
 import { useToast } from "../components/Toast";
 import PixModal from "../components/PixModal";
-import { MATRICULA_LINHAS } from "../data/aluno";
+import { useFinanceiroAluno } from "../data/useFinanceiroAluno";
+import { linhasDaMatricula } from "../lib/matricula";
 import { bloqueioDoAluno, checkinDoDia, sequenciaAtual } from "../lib/checkins";
 import { dataBrParaIso, HOJE_DEMO, LETRA_DIA, paraData, somarDias } from "../lib/datas";
 
-const PROX_COBRANCA = { valor: "R$ 129,90", venc: "17/09/2026", parcela: "única" };
 
 function Card({
   className = "",
@@ -33,9 +33,11 @@ export default function AlunoHome() {
   const toast = useToast();
   const { user } = useAuth();
   const aluno = useAlunoLogado();
-  const { checkins, registrarCheckin } = useStore();
+  const { checkins, registrarCheckin, planos, treinos } = useStore();
+  const { cobrancaAberta, pagarComPix } = useFinanceiroAluno();
   const [pixOpen, setPixOpen] = useState(false);
-  const [pendente, setPendente] = useState(true);
+  const pendente = !!cobrancaAberta;
+  const treinoDeHoje = treinos.find((t) => t.alunoId === aluno.id && t.divisao === "A");
 
   const feitoHoje = checkinDoDia(checkins, aluno.id, HOJE_DEMO);
   const streak = sequenciaAtual(checkins, aluno.id);
@@ -60,7 +62,9 @@ export default function AlunoHome() {
   }
 
   const msgCheckin = bloqueiaCheckin
-    ? matriculaVencida
+    ? aluno.cancelamento
+      ? "Matrícula cancelada — procure a recepção para fazer uma nova matrícula."
+      : matriculaVencida
       ? "Matrícula vencida — renove na recepção para liberar o check-in."
       : "Mensalidade em atraso: regularize para liberar o check-in."
     : feitoHoje
@@ -131,9 +135,9 @@ export default function AlunoHome() {
             {pendente ? "Cobrança em aberto" : "Mensalidade em dia"}
           </div>
           <div className="mt-1 text-[13px] text-navy/55">
-            {pendente
-              ? "R$ 129,90 · vencimento 17/09/2026"
-              : "Próximo vencimento 17/10/2026"}
+            {cobrancaAberta
+              ? `${cobrancaAberta.valor} · vencimento ${cobrancaAberta.venc}`
+              : "Nenhuma cobrança em aberto."}
           </div>
           {pendente && (
             <button
@@ -151,10 +155,12 @@ export default function AlunoHome() {
             Treino de hoje
           </div>
           <div className="mt-2.5 text-base font-bold text-navy">
-            Divisão A · Peito e tríceps
+            {treinoDeHoje ? `Divisão A · ${treinoDeHoje.titulo}` : "Sem treino prescrito"}
           </div>
           <div className="mt-1 text-[13px] text-navy/55">
-            4 exercícios · ~50 min
+            {treinoDeHoje
+              ? `${treinoDeHoje.exercicios.length} exercícios · prescrito por ${treinoDeHoje.atualizadoPor}`
+              : "Seu instrutor ainda não prescreveu o treino."}
           </div>
           <button
             type="button"
@@ -194,7 +200,7 @@ export default function AlunoHome() {
             Minha matrícula
           </div>
           <div className="mt-3.5 flex flex-col gap-2.5">
-            {MATRICULA_LINHAS.map((linha) => (
+            {linhasDaMatricula(aluno, planos).map((linha) => (
               <div
                 key={linha.k}
                 className="flex justify-between gap-3 border-b border-dashed border-navy/10 pb-2.5 text-[13px]"
@@ -210,12 +216,17 @@ export default function AlunoHome() {
       <PixModal
         open={pixOpen}
         onClose={() => setPixOpen(false)}
-        proxCobranca={PROX_COBRANCA}
+        proxCobranca={
+          cobrancaAberta
+            ? { valor: cobrancaAberta.valor, venc: cobrancaAberta.venc, parcela: cobrancaAberta.parcela ?? "—" }
+            : null
+        }
         onConfirm={() => {
           setPixOpen(false);
-          setPendente(false);
+          if (!cobrancaAberta) return;
+          pagarComPix();
           toast(
-            `Pagamento de ${PROX_COBRANCA.valor} confirmado — matrícula atualizada e check-in liberado.`,
+            `Pagamento de ${cobrancaAberta.valor} confirmado — matrícula atualizada e check-in liberado.`,
           );
         }}
       />

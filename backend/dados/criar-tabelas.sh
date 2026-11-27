@@ -98,6 +98,12 @@ criar notificacoes destino=S criadoEm=S -- destino,criadoEm
 # exportacoes: relatórios exportados (arquivo no S3)
 criar exportacoes relatorio=S criadoEm=S -- relatorio,criadoEm
 
+# sessoes: memória do agente de IA (Strands Agents): o histórico da conversa de cada usuário (Lambda do /chat)
+criar sessoes sessaoId=S -- sessaoId
+# o atributo "expira" (segundos desde 1970) apaga a conversa sozinha depois de 30 dias
+aws dynamodb update-time-to-live --table-name "$(nome sessoes)" \
+  --time-to-live-specification "Enabled=true,AttributeName=expira" >/dev/null 2>&1 || true
+
 echo
 echo "Tabelas do projeto:"
 aws dynamodb list-tables --query "TableNames[?contains(@, '-${SUFIXO}')]" --output text | tr '\t' '\n'

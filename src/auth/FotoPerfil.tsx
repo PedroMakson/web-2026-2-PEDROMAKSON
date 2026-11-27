@@ -29,6 +29,8 @@ type PerfilUsuarioValor = {
   trocar: (arquivo: File) => Promise<void>;
   // altera telefone, e-mail de contato, nascimento, sexo e endereço (PUT); lança Error com a mensagem para o usuário
   salvarDados: (dados: DadosPerfil) => Promise<void>;
+  // relê perfil e foto da nuvem (usado quando o chat troca a foto por conta própria)
+  atualizar: () => Promise<void>;
 };
 
 const PerfilUsuarioContext = createContext<PerfilUsuarioValor | null>(null);
@@ -102,6 +104,12 @@ export function FotoPerfilProvider({ children }: { children: ReactNode }) {
     [aplicarFoto],
   );
 
+  const atualizar = useCallback(async () => {
+    const atual = await buscarPerfil();
+    setPerfil(atual.perfil);
+    aplicarFoto(atual.foto);
+  }, [aplicarFoto]);
+
   const salvarDados = useCallback(async (dados: DadosPerfil) => {
     setSalvando(true);
     try {
@@ -122,6 +130,7 @@ export function FotoPerfilProvider({ children }: { children: ReactNode }) {
         configurado: fotoConfigurada,
         trocar,
         salvarDados,
+        atualizar,
       }}
     >
       {children}

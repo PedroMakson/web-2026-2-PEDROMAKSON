@@ -1,29 +1,23 @@
-import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { type ChangeEvent, type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { fetchAuthSession } from "aws-amplify/auth";
-import { MessageCircle, Send, X } from "lucide-react";
+import { MessageCircle, Paperclip, Send, Trash2, X } from "lucide-react";
 import { useLocation } from "react-router-dom";
-import { useAuth } from "../auth/AuthContext";
+import { useFotoPerfil } from "../auth/FotoPerfil";
+import { blobParaBase64 } from "../lib/fotoApi";
+import { reduzirImagem, TIPOS_ACEITOS, validarArquivo } from "../lib/imagem";
 
-const WS_URL: string | undefined = import.meta.env.VITE_WS_URL;
-const MAX_TENTATIVAS = 3;
-const ESPERA_RESPOSTA_MS = 70000;
-const HISTORICO_MAX = 6;
+// Endereço do agente de IA (API REST do API Gateway, chat.<domínio>/chat), protegido pelo JWT do Cognito.
+const CHAT_URL: string | undefined = import.meta.env.VITE_CHAT_API_URL;
+const ESPERA_RESPOSTA_MS = 60000;
 
-type Status = "conectando" | "online" | "desconectado" | "indisponivel";
 type Autor = "usuario" | "assistente" | "sistema";
 type Mensagem = { id: number; autor: Autor; texto: string; hora: string };
 
 const QUEBRA_DE_LINHA = /\r?\n/;
+const SAUDACAO = "Olá! Sou o assistente do GymFlow. Posso tirar dúvidas do sistema, informar a hora e trocar sua foto de perfil: é só anexar a imagem no clipe. Como posso ajudar?";
 
 const horaAtual = () =>
   new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-
-const STATUS: Record<Status, { rotulo: string; cor: string }> = {
-  conectando: { rotulo: "Conectando…", cor: "bg-[#d69e2e]" },
-  online: { rotulo: "Online", cor: "bg-neon" },
-  desconectado: { rotulo: "Desconectado", cor: "bg-danger" },
-  indisponivel: { rotulo: "Indisponível", cor: "bg-white/40" },
-};
 
 function TextoFormatado({ texto }: { texto: string }) {
   return (
@@ -32,10 +26,12 @@ function TextoFormatado({ texto }: { texto: string }) {
         const item = linha.match(/^\s*[*-]\s+(.*)$/);
         const conteudo = item ? item[1] : linha;
         const partes = conteudo
-          .split(/(\*\*[^*]+\*\*)/g)
+          .split(/(\*\*[^*]+\*\*|\*[^*\s][^*]*\*)/g)
           .map((parte, j) =>
             parte.length > 4 && parte.startsWith("**") && parte.endsWith("**") ? (
               <strong key={j}>{parte.slice(2, -2)}</strong>
+            ) : parte.length > 2 && parte.startsWith("*") && parte.endsWith("*") ? (
+              <em key={j}>{parte.slice(1, -1)}</em>
             ) : (
               parte
             ),
@@ -54,28 +50,59 @@ function TextoFormatado({ texto }: { texto: string }) {
   );
 }
 
+// Chama o /chat com o ID token do Cognito. Lança Error com uma mensagem pronta para o usuário.
+async function chamar<T>(metodo: "GET" | "POST" | "DELETE", corpo?: unknown): Promise<T> {
+  const sessao = await fetchAuthSession();
+  const token = sessao.tokens?.idToken?.toString();
+  if (!token) throw new Error("Sessão expirada. Entre novamente.");
+
+  const controle = new AbortController();
+  const limite = window.setTimeout(() => controle.abort(), ESPERA_RESPOSTA_MS);
+  try {
+    const resposta = await fetch(CHAT_URL!, {
+      method: metodo,
+      headers: { Authorization: token, ...(corpo ? { "Content-Type": "application/json" } : {}) },
+      body: corpo ? JSON.stringify(corpo) : undefined,
+      signal: controle.signal,
+    });
+    if (resposta.status === 401 || resposta.status === 403) {
+      throw new Error("Sessão expirada. Entre novamente.");
+    }
+    const dados = await resposta.json().catch(() => ({}));
+    if (!resposta.ok) {
+      throw new Error(typeof dados?.message === "string" ? dados.message : "Não foi possível falar com o assistente.");
+    }
+    return dados as T;
+  } catch (erro) {
+    if (erro instanceof DOMException && erro.name === "AbortError") {
+      throw new Error("A resposta demorou demais. Tente novamente.");
+    }
+    if (erro instanceof TypeError) throw new Error("Sem conexão com o assistente. Tente novamente.");
+    throw erro;
+  } finally {
+    window.clearTimeout(limite);
+  }
+}
+
 export default function ChatBubble() {
   const [aberto, setAberto] = useState(false);
-  const [status, setStatus] = useState<Status>(WS_URL ? "desconectado" : "indisponivel");
   const [mensagens, setMensagens] = useState<Mensagem[]>([
-    {
-      id: 0,
-      autor: "assistente",
-      texto: "Olá! Sou o assistente do GymFlow. Como posso ajudar?",
-      hora: horaAtual(),
-    },
+    { id: 0, autor: "assistente", texto: SAUDACAO, hora: horaAtual() },
   ]);
   const [texto, setTexto] = useState("");
+  const [anexo, setAnexo] = useState<File | null>(null);
+  const [previa, setPrevia] = useState<string | null>(null);
   const [aguardando, setAguardando] = useState(false);
-  const { user } = useAuth();
+  const [carregando, setCarregando] = useState(false);
   const { pathname } = useLocation();
+  const foto = useFotoPerfil();
 
-  const socket = useRef<WebSocket | null>(null);
-  const tentativas = useRef(0);
-  const timer = useRef<number | undefined>(undefined);
-  const abertoRef = useRef(false);
   const proximoId = useRef(1);
+  const historicoCarregado = useRef(false);
   const lista = useRef<HTMLDivElement>(null);
+  const seletor = useRef<HTMLInputElement>(null);
+
+  const disponivel = Boolean(CHAT_URL);
 
   const adicionar = useCallback((autor: Autor, conteudo: string) => {
     setMensagens((atual) => [
@@ -84,104 +111,87 @@ export default function ChatBubble() {
     ]);
   }, []);
 
-  async function conectar() {
-    if (!WS_URL) return;
-    const atual = socket.current;
-    if (atual && atual.readyState <= WebSocket.OPEN) return;
-
-    setStatus("conectando");
-    try {
-      const sessao = await fetchAuthSession();
-      const token = sessao.tokens?.idToken?.toString();
-      if (!token) {
-        setStatus("desconectado");
-        return;
-      }
-
-      const ws = new WebSocket(`${WS_URL}?token=${encodeURIComponent(token)}`);
-      socket.current = ws;
-
-      ws.onopen = () => {
-        tentativas.current = 0;
-        setStatus("online");
-      };
-
-      ws.onmessage = (evento) => {
-        let dados: { type?: string; message?: unknown };
-        try {
-          dados = JSON.parse(String(evento.data));
-        } catch {
-          dados = { type: "answer", message: String(evento.data) };
-        }
-        adicionar(dados.type === "error" ? "sistema" : "assistente", String(dados.message ?? ""));
-        setAguardando(false);
-      };
-
-      ws.onclose = () => {
-        if (socket.current !== ws) return;
-        socket.current = null;
-        setStatus("desconectado");
-        setAguardando(false);
-        if (abertoRef.current && tentativas.current < MAX_TENTATIVAS) {
-          tentativas.current += 1;
-          timer.current = window.setTimeout(conectar, 3000);
-        }
-      };
-    } catch {
-      setStatus("desconectado");
-    }
-  }
-
+  // ao abrir pela primeira vez, traz a conversa guardada no servidor: a memória do agente aparece na tela
   useEffect(() => {
-    abertoRef.current = aberto;
-    if (aberto) {
-      tentativas.current = 0;
-      conectar();
-    }
-  }, [aberto]);
+    if (!aberto || !disponivel || historicoCarregado.current) return;
+    historicoCarregado.current = true;
+    setCarregando(true);
+    chamar<{ mensagens: { autor: "usuario" | "assistente"; texto: string }[] }>("GET")
+      .then(({ mensagens: guardadas }) => {
+        if (guardadas.length === 0) return;
+        setMensagens(
+          guardadas.map((m) => ({ id: proximoId.current++, autor: m.autor, texto: m.texto, hora: "" })),
+        );
+      })
+      .catch(() => {
+        // sem histórico: o chat segue com a saudação
+      })
+      .finally(() => setCarregando(false));
+  }, [aberto, disponivel]);
 
-  useEffect(
-    () => () => {
-      window.clearTimeout(timer.current);
-      const ws = socket.current;
-      socket.current = null;
-      ws?.close();
-    },
-    [],
-  );
-
+  // prévia da imagem escolhida (nada vai para o servidor antes de enviar)
   useEffect(() => {
-    if (!aguardando) return;
-    const limite = window.setTimeout(() => {
-      adicionar("sistema", "A resposta demorou demais. Tente novamente.");
-      setAguardando(false);
-    }, ESPERA_RESPOSTA_MS);
-    return () => window.clearTimeout(limite);
-  }, [aguardando, adicionar]);
+    if (!anexo) {
+      setPrevia(null);
+      return;
+    }
+    const url = URL.createObjectURL(anexo);
+    setPrevia(url);
+    return () => URL.revokeObjectURL(url);
+  }, [anexo]);
 
   useEffect(() => {
     const el = lista.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [mensagens, aguardando, aberto]);
+  }, [mensagens, aguardando, aberto, carregando]);
 
-  function enviar(evento: FormEvent) {
-    evento.preventDefault();
-    const pergunta = texto.trim();
-    const ws = socket.current;
-    if (!pergunta || aguardando || !ws || ws.readyState !== WebSocket.OPEN) return;
-    const historico = mensagens
-      .filter((m) => m.autor !== "sistema" && m.id !== 0)
-      .slice(-HISTORICO_MAX)
-      .map((m) => ({ role: m.autor === "usuario" ? "user" : "model", text: m.texto }));
-    ws.send(
-      JSON.stringify({ message: pergunta, profile: user?.perfil, page: pathname, history: historico }),
-    );
-    adicionar("usuario", pergunta);
-    setTexto("");
-    setAguardando(true);
+  function aoEscolherImagem(evento: ChangeEvent<HTMLInputElement>) {
+    const escolhido = evento.target.files?.[0];
+    evento.target.value = ""; // permite escolher o mesmo arquivo de novo
+    if (!escolhido) return;
+    const problema = validarArquivo(escolhido);
+    if (problema) {
+      adicionar("sistema", problema);
+      return;
+    }
+    setAnexo(escolhido);
   }
 
-  const online = status === "online";
+  async function enviar(evento: FormEvent) {
+    evento.preventDefault();
+    const pergunta = texto.trim();
+    if ((!pergunta && !anexo) || aguardando || !disponivel) return;
+    const arquivo = anexo;
+    adicionar("usuario", arquivo ? `${pergunta}${pergunta ? "\n" : ""}📎 ${arquivo.name}` : pergunta);
+    setTexto("");
+    setAnexo(null);
+    setAguardando(true);
+    try {
+      const corpo: Record<string, unknown> = { pagina: pathname };
+      if (pergunta) corpo.mensagem = pergunta;
+      if (arquivo) corpo.anexo = { dados: await blobParaBase64(await reduzirImagem(arquivo)) };
+      const resposta = await chamar<{ resposta: string; acoes?: string[] }>("POST", corpo);
+      adicionar("assistente", resposta.resposta);
+      if (resposta.acoes?.includes("foto_atualizada")) {
+        await foto.atualizar().catch(() => undefined); // a foto nova aparece no menu e no Meu perfil
+      }
+    } catch (erro) {
+      adicionar("sistema", erro instanceof Error ? erro.message : "Não foi possível falar com o assistente.");
+    } finally {
+      setAguardando(false);
+    }
+  }
+
+  async function novaConversa() {
+    if (aguardando) return;
+    try {
+      await chamar("DELETE");
+      proximoId.current = 1;
+      setMensagens([{ id: 0, autor: "assistente", texto: SAUDACAO, hora: horaAtual() }]);
+    } catch (erro) {
+      adicionar("sistema", erro instanceof Error ? erro.message : "Não foi possível apagar a conversa.");
+    }
+  }
 
   return (
     <>
@@ -197,10 +207,20 @@ export default function ChatBubble() {
                 Assistente GymFlow
               </div>
               <div className="mt-0.5 flex items-center gap-1.5 text-[11px] font-semibold text-white/65">
-                <span className={`h-2 w-2 rounded-full ${STATUS[status].cor}`} />
-                {STATUS[status].rotulo}
+                <span className={`h-2 w-2 rounded-full ${disponivel ? "bg-neon" : "bg-white/40"}`} />
+                {disponivel ? "Online · lembra da conversa" : "Indisponível"}
               </div>
             </div>
+            <button
+              type="button"
+              onClick={novaConversa}
+              disabled={!disponivel || aguardando}
+              aria-label="Nova conversa"
+              title="Nova conversa (apaga a memória)"
+              className="rounded-lg p-1.5 text-white/65 transition hover:text-white disabled:opacity-40"
+            >
+              <Trash2 size={17} />
+            </button>
             <button
               type="button"
               onClick={() => setAberto(false)}
@@ -228,54 +248,73 @@ export default function ChatBubble() {
                 ) : (
                   <div className="whitespace-pre-wrap">{m.texto}</div>
                 )}
-                <div
-                  className={`mt-1 text-right text-[10px] font-semibold ${
-                    m.autor === "usuario" ? "text-white/55" : "text-navy/40"
-                  }`}
-                >
-                  {m.hora}
-                </div>
+                {m.hora && (
+                  <div
+                    className={`mt-1 text-right text-[10px] font-semibold ${
+                      m.autor === "usuario" ? "text-white/55" : "text-navy/40"
+                    }`}
+                  >
+                    {m.hora}
+                  </div>
+                )}
               </div>
             ))}
-            {aguardando && (
+            {(aguardando || carregando) && (
               <div className="self-start rounded-2xl rounded-bl-md border border-navy/10 bg-white px-3.5 py-2.5 text-[13.5px] font-semibold text-navy/50">
-                <span className="animate-pulse">digitando…</span>
+                <span className="animate-pulse">{carregando ? "carregando a conversa…" : "digitando…"}</span>
               </div>
             )}
-            {status === "indisponivel" && (
+            {!disponivel && (
               <p className="text-center text-xs font-semibold text-navy/50">
                 O assistente não está configurado neste ambiente.
               </p>
             )}
-            {status === "desconectado" && (
-              <div className="flex flex-col items-center gap-2 py-1 text-xs font-semibold text-navy/55">
-                Sem conexão com o assistente.
-                <button
-                  type="button"
-                  onClick={() => {
-                    tentativas.current = 0;
-                    conectar();
-                  }}
-                  className="rounded-lg border border-navy/20 bg-white px-3 py-1.5 font-bold text-navy transition hover:border-teal"
-                >
-                  Tentar novamente
-                </button>
-              </div>
-            )}
           </div>
 
+          {anexo && (
+            <div className="flex items-center gap-2.5 border-t border-navy/10 bg-white px-3 pt-2.5">
+              {previa && <img src={previa} alt="" className="h-10 w-10 rounded-lg object-cover" />}
+              <span className="min-w-0 flex-1 truncate text-xs font-semibold text-navy/70">{anexo.name}</span>
+              <button
+                type="button"
+                onClick={() => setAnexo(null)}
+                aria-label="Remover imagem"
+                className="rounded-md p-1 text-navy/45 transition hover:text-navy"
+              >
+                <X size={15} />
+              </button>
+            </div>
+          )}
+
           <form onSubmit={enviar} className="flex gap-2 border-t border-navy/10 bg-white p-3">
+            <input
+              ref={seletor}
+              type="file"
+              accept={TIPOS_ACEITOS.join(",")}
+              onChange={aoEscolherImagem}
+              className="hidden"
+            />
+            <button
+              type="button"
+              onClick={() => seletor.current?.click()}
+              disabled={!disponivel || aguardando}
+              aria-label="Anexar imagem"
+              title="Anexar imagem (JPEG, PNG ou WebP)"
+              className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-[10px] border border-navy/20 text-navy/70 transition hover:border-teal hover:text-navy disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Paperclip size={18} />
+            </button>
             <input
               value={texto}
               onChange={(evento) => setTexto(evento.target.value)}
               maxLength={500}
-              disabled={!online || aguardando}
-              placeholder={online ? "Digite sua pergunta…" : "Aguardando conexão…"}
+              disabled={!disponivel || aguardando}
+              placeholder={disponivel ? "Pergunte ou anexe uma imagem…" : "Assistente indisponível"}
               className="min-w-0 flex-1 rounded-[10px] border border-navy/20 px-3 py-2.5 text-sm outline-none focus:border-teal focus:ring-[3px] focus:ring-teal/25 disabled:bg-navy/5"
             />
             <button
               type="submit"
-              disabled={!online || aguardando || !texto.trim()}
+              disabled={!disponivel || aguardando || (!texto.trim() && !anexo)}
               aria-label="Enviar"
               className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-[10px] bg-teal text-navy-dark transition hover:bg-neon disabled:cursor-not-allowed disabled:opacity-50"
             >

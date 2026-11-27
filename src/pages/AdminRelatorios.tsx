@@ -1,47 +1,37 @@
 import { useState } from "react";
 import { Download, FileText } from "lucide-react";
 import { useToast } from "../components/Toast";
+import { useAuth } from "../auth/AuthContext";
+import { useStore } from "../data/store";
+import { montarRelatorio, nomeDoArquivo, PERIODOS_RELATORIO, RELATORIOS, type TituloRelatorio } from "../lib/relatorios";
 
-const RELATORIOS = [
-  {
-    titulo: "Receita e inadimplência",
-    desc: "Faturamento por plano, taxa de inadimplência e evolução mensal.",
-  },
-  {
-    titulo: "Frequência de treino",
-    desc: "Check-ins por aluno, por instrutor, por faixa de horário e por origem (App, Recepção e Retroativo).",
-  },
-  {
-    titulo: "Matrículas",
-    desc: "Novas matrículas, renovações e cancelamentos no período.",
-  },
-  {
-    titulo: "Avaliações físicas",
-    desc: "Evolução de peso, % de gordura e medidas por aluno.",
-  },
-];
-
-const PERIODOS = ["Últimos 7 dias", "Últimos 30 dias", "Últimos 90 dias"];
-
-const EXPORTACOES_INICIAL = [
-  { relatorio: "Receita e inadimplência", periodo: "Últimos 30 dias", quando: "13/09/2026 09:12" },
-  { relatorio: "Frequência de treino", periodo: "Últimos 90 dias", quando: "10/09/2026 17:40" },
-];
+const dataHoraBr = (iso: string) => {
+  const d = new Date(iso);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+};
 
 export default function AdminRelatorios() {
   const toast = useToast();
+  const { user } = useAuth();
+  const { alunos, planos, pagamentos, checkins, avaliacoes, matriculas, exportacoes, registrarExportacao } = useStore();
   const [periodos, setPeriodos] = useState<Record<string, string>>(
     Object.fromEntries(RELATORIOS.map((r) => [r.titulo, "Últimos 30 dias"])),
   );
-  const [exportacoes, setExportacoes] = useState(EXPORTACOES_INICIAL);
 
-  function exportar(titulo: string) {
-    const periodo = periodos[titulo];
-    setExportacoes((prev) => [
-      { relatorio: titulo, periodo, quando: "21/09/2026 agora" },
-      ...prev,
-    ]);
-    toast(`PDF de "${titulo}" gerado (RF21).`);
+  function exportar(titulo: TituloRelatorio) {
+    const rotulo = periodos[titulo];
+    const dias = PERIODOS_RELATORIO.find((p) => p.rotulo === rotulo)?.dias ?? 30;
+    const por = user?.nome ?? "Administrador";
+    try {
+      const pdf = montarRelatorio(titulo, rotulo, dias, { alunos, planos, pagamentos, checkins, avaliacoes, matriculas }, por);
+      pdf.save(nomeDoArquivo(titulo, dias));
+    } catch {
+      toast("Não foi possível gerar o PDF agora.");
+      return;
+    }
+    registrarExportacao({ relatorio: titulo, periodo: rotulo, por });
+    toast(`PDF de "${titulo}" gerado com os dados do sistema (RF21).`);
   }
 
   return (
@@ -64,8 +54,8 @@ export default function AdminRelatorios() {
                 onChange={(e) => setPeriodos({ ...periodos, [r.titulo]: e.target.value })}
                 className="flex-1 rounded-[9px] border border-navy/16 bg-white px-2.5 py-2.5 text-[13px] font-semibold"
               >
-                {PERIODOS.map((p) => (
-                  <option key={p}>{p}</option>
+                {PERIODOS_RELATORIO.map((p) => (
+                  <option key={p.rotulo}>{p.rotulo}</option>
                 ))}
               </select>
               <button
@@ -89,15 +79,17 @@ export default function AdminRelatorios() {
             <tr className="bg-navy/[.03] text-left text-[11px] font-bold uppercase tracking-wider text-navy/45">
               <th className="px-5 py-3">Relatório</th>
               <th className="px-3 py-3">Período</th>
+              <th className="px-3 py-3">Gerado por</th>
               <th className="px-5 py-3">Quando</th>
             </tr>
           </thead>
           <tbody>
-            {exportacoes.map((e, i) => (
-              <tr key={i} className="border-t border-navy/[.07]">
+            {exportacoes.map((e) => (
+              <tr key={e.id} className="border-t border-navy/[.07]">
                 <td className="px-5 py-3.5 font-semibold">{e.relatorio}</td>
                 <td className="px-3 py-3.5 text-navy/60">{e.periodo}</td>
-                <td className="px-5 py-3.5 text-navy/50">{e.quando}</td>
+                <td className="px-3 py-3.5 text-navy/60">{e.por}</td>
+                <td className="px-5 py-3.5 text-navy/50">{dataHoraBr(e.criadoEm)}</td>
               </tr>
             ))}
           </tbody>

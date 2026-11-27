@@ -5,7 +5,9 @@ import { useToast } from "../components/Toast";
 import Obrigatorio from "../components/Obrigatorio";
 
 export default function AdminPlanos() {
-  const { planos, salvarPlano } = useStore();
+  const { planos, alunos, salvarPlano } = useStore();
+  // alunos com matrícula em vigor naquele plano (calculado dos cadastros)
+  const ativosDo = (plano: string) => alunos.filter((a) => a.plano === plano && a.ativo).length;
   const toast = useToast();
   const [modalOpen, setModalOpen] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
@@ -47,7 +49,7 @@ export default function AdminPlanos() {
               {p.regra}
             </div>
             <div className="mt-3.5 text-xs font-bold text-teal-dark">
-              {p.ativos} aluno{p.ativos === 1 ? "" : "s"} ativo{p.ativos === 1 ? "" : "s"}
+              {ativosDo(p.nome)} aluno{ativosDo(p.nome) === 1 ? "" : "s"} ativo{ativosDo(p.nome) === 1 ? "" : "s"}
             </div>
             <button
               type="button"

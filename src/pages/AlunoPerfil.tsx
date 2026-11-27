@@ -1,7 +1,8 @@
 import { useAuth } from "../auth/AuthContext";
 import PerfilCard from "../components/PerfilCard";
 import { useAlunoLogado } from "../data/useAlunoLogado";
-import { MATRICULA_LINHAS } from "../data/aluno";
+import { useStore } from "../data/store";
+import { linhasDaMatricula } from "../lib/matricula";
 import { ENDERECO_VAZIO } from "../lib/endereco";
 
 // Meu perfil do aluno: à esquerda o que o aluno altera (foto, contato, nascimento, sexo, endereço e senha;
@@ -10,6 +11,7 @@ import { ENDERECO_VAZIO } from "../lib/endereco";
 export default function AlunoPerfil() {
   const { user } = useAuth();
   const aluno = useAlunoLogado();
+  const { planos } = useStore();
 
   const nome = aluno?.nome ?? user?.nome ?? "";
   const iniciais = nome
@@ -41,7 +43,7 @@ export default function AlunoPerfil() {
           Dados cadastrais
         </div>
         <div className="mt-3.5 flex flex-col gap-2.5">
-          {MATRICULA_LINHAS.map((linha) => (
+          {linhasDaMatricula(aluno, planos).map((linha) => (
             <div
               key={linha.k}
               className="flex justify-between gap-3 border-b border-dashed border-navy/10 pb-2.5 text-[13px]"

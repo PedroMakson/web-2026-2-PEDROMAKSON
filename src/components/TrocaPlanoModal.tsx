@@ -58,7 +58,7 @@ export default function TrocaPlanoModal({
         <div className="flex items-start justify-between gap-3">
           <div>
             <h2 className="font-display text-2xl font-bold text-navy">
-              {renovacao ? "Renovar matrícula" : "Trocar plano"}
+              {aluno.cancelamento ? "Nova matrícula" : renovacao ? "Renovar matrícula" : "Trocar plano"}
             </h2>
             <p className="mt-1 text-[13px] text-navy/55">
               {aluno.nome} · hoje em {aluno.plano}
@@ -93,7 +93,7 @@ export default function TrocaPlanoModal({
             onClick={confirmar}
             className="flex-1 rounded-[10px] bg-teal py-3 text-sm font-bold text-navy-dark transition hover:bg-neon"
           >
-            Confirmar troca
+            {aluno.cancelamento ? "Confirmar nova matrícula" : "Confirmar troca"}
           </button>
         </div>
       </div>

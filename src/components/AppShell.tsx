@@ -3,6 +3,7 @@ import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { Bell, ChevronLeft, ChevronRight, LogOut, Menu, X } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
 import { useFotoPerfil } from "../auth/FotoPerfil";
+import { useStore } from "../data/store";
 import Avatar from "./Avatar";
 import ChatBubble from "./ChatBubble";
 
@@ -43,7 +44,7 @@ function tagColor(tipo: string) {
 export default function AppShell({
   menuItems,
   roleLabel,
-  notifications: initialNotifications = [],
+  notifications: recebidas = [],
   notifFooter,
   children,
 }: AppShellProps) {
@@ -54,7 +55,11 @@ export default function AppShell({
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
-  const [notifications, setNotifications] = useState(initialNotifications);
+  // As notificações vêm calculadas dos dados (mudam quando os dados mudam); o que já foi lido fica guardado, por pessoa,
+  // na tabela notificacoes (pelo texto da notificação).
+  const { notificacoesLidas, marcarNotificacoesLidas } = useStore();
+  const lidas = new Set(notificacoesLidas.map((n) => n.texto));
+  const notifications = recebidas.map((n) => ({ ...n, lida: n.lida || lidas.has(n.texto) }));
   const [confirmandoSaida, setConfirmandoSaida] = useState(false);
   const [saindo, setSaindo] = useState(false);
 
@@ -267,22 +272,23 @@ export default function AppShell({
 
               <button
                 type="button"
-                onClick={() =>
-                  setNotifications((prev) =>
-                    prev.map((n) => ({ ...n, lida: true })),
-                  )
-                }
+                onClick={() => marcarNotificacoesLidas(notifications)}
                 className="mt-2.5 self-start text-xs font-bold text-teal-mid"
               >
                 Marcar todas como lidas
               </button>
 
               <div className="mt-4 flex flex-col gap-2.5">
-                {notifications.map((n, i) => {
+                {notifications.length === 0 && (
+                  <p className="rounded-xl border border-navy/10 bg-white p-3.5 text-[13px] text-navy/60">
+                    Nenhuma notificação por enquanto.
+                  </p>
+                )}
+                {notifications.map((n) => {
                   const tag = tagColor(n.tipo);
                   return (
                     <div
-                      key={i}
+                      key={n.texto}
                       className={`rounded-xl border p-3.5 ${
                         n.lida
                           ? "border-navy/10 bg-white"

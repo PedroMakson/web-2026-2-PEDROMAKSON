@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Lock, Pencil, Plus, Repeat, Search, Unlock } from "lucide-react";
+import { Lock, Pencil, Plus, Repeat, Search, Unlock, UserX } from "lucide-react";
 import { useStore } from "../data/store";
 import { useToast } from "../components/Toast";
 import TrocaPlanoModal from "../components/TrocaPlanoModal";
+import CancelarMatriculaModal from "../components/CancelarMatriculaModal";
 import { rotasPorArea } from "../lib/rotas";
 
 export default function RecepcaoAlunos() {
@@ -13,6 +14,7 @@ export default function RecepcaoAlunos() {
   const { alunos, toggleAcessoAluno } = useStore();
   const [busca, setBusca] = useState("");
   const [trocaId, setTrocaId] = useState<number | null>(null);
+  const [cancelarId, setCancelarId] = useState<number | null>(null);
 
   const filtrados = alunos.filter((a) =>
     `${a.nome} ${a.email} ${a.matricula}`.toLowerCase().includes(busca.toLowerCase()),
@@ -59,10 +61,19 @@ export default function RecepcaoAlunos() {
                     {a.matricula}
                     {a.matriculaAnterior && ` · renovação de ${a.matriculaAnterior}`}
                   </div>
-                  {!a.ativo && (
-                    <span className="mt-1 inline-block rounded-full bg-danger/10 px-2.5 py-0.5 text-[10px] font-bold text-danger-dark">
-                      Acesso bloqueado
+                  {a.cancelamento ? (
+                    <span
+                      title={`${a.cancelamento.motivo} — ${a.cancelamento.por}`}
+                      className="mt-1 inline-block rounded-full bg-navy/[.08] px-2.5 py-0.5 text-[10px] font-bold text-navy/70"
+                    >
+                      Matrícula cancelada
                     </span>
+                  ) : (
+                    !a.ativo && (
+                      <span className="mt-1 inline-block rounded-full bg-danger/10 px-2.5 py-0.5 text-[10px] font-bold text-danger-dark">
+                        Acesso bloqueado
+                      </span>
+                    )
                   )}
                 </td>
                 <td className="px-3 py-[15px]">{a.plano}</td>
@@ -90,12 +101,23 @@ export default function RecepcaoAlunos() {
                     </button>
                     <button
                       type="button"
-                      title="Trocar plano"
+                      title={a.cancelamento ? "Nova matrícula (reativar)" : "Trocar plano"}
                       onClick={() => setTrocaId(a.id)}
                       className="flex h-[34px] w-[34px] items-center justify-center rounded-[9px] border border-teal text-teal-dark transition hover:bg-teal/15"
                     >
                       <Repeat size={15} />
                     </button>
+                    {!a.cancelamento && (
+                      <button
+                        type="button"
+                        title="Cancelar matrícula"
+                        onClick={() => setCancelarId(a.id)}
+                        className="flex h-[34px] w-[34px] items-center justify-center rounded-[9px] border border-navy/18 text-navy/70 transition hover:border-danger/40 hover:bg-danger/10 hover:text-danger-dark"
+                      >
+                        <UserX size={15} />
+                      </button>
+                    )}
+                    {!a.cancelamento && (
                     <button
                       type="button"
                       title={a.ativo ? "Bloquear" : "Desbloquear"}
@@ -115,6 +137,7 @@ export default function RecepcaoAlunos() {
                     >
                       {a.ativo ? <Lock size={15} /> : <Unlock size={15} />}
                     </button>
+                    )}
                   </div>
                 </td>
               </tr>
@@ -129,6 +152,7 @@ export default function RecepcaoAlunos() {
         alunoId={trocaId}
         renovacao={false}
       />
+      <CancelarMatriculaModal open={cancelarId !== null} onClose={() => setCancelarId(null)} alunoId={cancelarId} />
     </div>
   );
 }

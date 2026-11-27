@@ -49,6 +49,7 @@ export default function RecepcaoCheckin() {
     }
     const bloqueio = bloqueioDoAluno(a);
     if (bloqueio) {
+      if (a.cancelamento) return "Bloqueado — matrícula cancelada";
       return a.fin === "Atrasado"
         ? "Bloqueado — mensalidade atrasada"
         : "Bloqueado — matrícula vencida";

@@ -1,21 +1,30 @@
 import { useState } from "react";
-import { TREINO_DIVISOES, type Exercicio } from "../data/aluno";
+import type { Exercicio } from "../data/aluno";
+import { type Divisao, useStore } from "../data/store";
+import { useAlunoLogado } from "../data/useAlunoLogado";
+import { formatarDataBr } from "../lib/pessoa";
 
-const DIVISOES = ["A", "B", "C"] as const;
+const DIVISOES: Divisao[] = ["A", "B", "C"];
 
+// O treino que o instrutor prescreveu (e pode alterar), lido do banco: o aluno só consulta.
 export default function AlunoTreino() {
-  const [divisao, setDivisao] = useState<(typeof DIVISOES)[number]>("A");
-  const treino = TREINO_DIVISOES[divisao];
+  const aluno = useAlunoLogado();
+  const { treinos } = useStore();
+  const [divisao, setDivisao] = useState<Divisao>("A");
+  const treino = treinos.find((t) => t.alunoId === aluno?.id && t.divisao === divisao);
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-navy/10 bg-white p-[22px]">
         <div>
           <div className="font-display text-[26px] font-bold text-navy">
-            Divisão {divisao} · {treino.titulo}
+            Divisão {divisao}
+            {treino ? ` · ${treino.titulo}` : ""}
           </div>
           <div className="mt-0.5 text-[13px] text-navy/55">
-            Prescrito por Carla Menezes · atualizado em 12/08/2026
+            {treino
+              ? `Prescrito por ${treino.atualizadoPor} · atualizado em ${formatarDataBr(treino.atualizadoEm.slice(0, 10))}`
+              : "Seu instrutor ainda não prescreveu esta divisão."}
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -43,9 +52,9 @@ export default function AlunoTreino() {
           <span>Reps</span>
           <span>Carga</span>
         </div>
-        {treino.exercicios.map((e: Exercicio) => (
+        {(treino?.exercicios ?? []).map((e: Exercicio, i) => (
           <div
-            key={e.nome}
+            key={`${e.nome}-${i}`}
             className="grid grid-cols-[2.2fr_.7fr_.8fr_.8fr] items-center gap-3 border-t border-navy/[.07] px-5 py-[15px] text-sm"
           >
             <span className="font-semibold">{e.nome}</span>
@@ -54,6 +63,11 @@ export default function AlunoTreino() {
             <span className="font-bold text-teal-mid">{e.carga}</span>
           </div>
         ))}
+        {(!treino || treino.exercicios.length === 0) && (
+          <div className="border-t border-navy/[.07] px-5 py-6 text-center text-sm text-navy/50">
+            Nenhum exercício nesta divisão.
+          </div>
+        )}
       </div>
 
       <p className="text-xs text-navy/45">

@@ -2,51 +2,148 @@ import { useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { Plus, X } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
-import { useStore } from "../data/store";
+import { type Divisao, type Treino, useStore } from "../data/store";
+import type { Exercicio } from "../data/aluno";
 import CalendarioFrequencia, { NavegacaoMes } from "../components/CalendarioFrequencia";
 import { DetalheCheckinModal } from "../components/CheckinModais";
 import { type Checkin, porSemana, totalNoMes, vigentes } from "../lib/checkins";
+import { dataBr, lerNumero, maisRecentesPrimeiro, medidas, virgula } from "../lib/avaliacao";
 import { HOJE_DEMO, paraData } from "../lib/datas";
 import { useToast } from "../components/Toast";
 import Obrigatorio from "../components/Obrigatorio";
 import { rotasPorArea } from "../lib/rotas";
 
-type Exercicio = { nome: string; series: string; reps: string; carga: string };
-
-const EXERCICIOS_PADRAO: Exercicio[] = [
-  { nome: "Supino reto com barra", series: "4", reps: "8-10", carga: "40 kg" },
-  { nome: "Supino inclinado halteres", series: "3", reps: "10-12", carga: "16 kg" },
-  { nome: "Crucifixo na máquina", series: "3", reps: "12", carga: "30 kg" },
-  { nome: "Tríceps corda", series: "4", reps: "12-15", carga: "25 kg" },
-];
-
-const AVALIACOES_PADRAO = [
-  { data: "12/08/2026", peso: "79,2 kg", altura: "1,78 m", gordura: "19,4%", medidas: "cintura 86 cm" },
-  { data: "10/06/2026", peso: "81,0 kg", altura: "1,78 m", gordura: "21,1%", medidas: "cintura 89 cm" },
-];
-
-const OBSERVACOES_PADRAO = [
-  { texto: "Relatou dor leve no ombro direito no supino — reduzir carga por duas semanas.", instrutor: "Carla Menezes", criadoEm: "12/08/2026 08:40" },
-  { texto: "Prefere treinar cedo; ajustar volume para sessões de 50 minutos.", instrutor: "Carla Menezes", criadoEm: "10/06/2026 07:15" },
-];
-
 const META_SEMANAL = 4;
+const DIVISOES: Divisao[] = ["A", "B", "C"];
 
 const ABAS = ["treino", "aval", "freq"] as const;
 type Aba = (typeof ABAS)[number];
+
+// Editor de uma divisão do treino. O estado nasce do treino guardado; a tela de cima o recria (key) a cada troca de
+// divisão ou depois de salvar.
+function EditorTreino({
+  divisao,
+  treino,
+  onSalvar,
+}: {
+  divisao: Divisao;
+  treino?: Treino;
+  onSalvar: (titulo: string, exercicios: Exercicio[]) => void;
+}) {
+  const toast = useToast();
+  const [titulo, setTitulo] = useState(treino?.titulo ?? "");
+  const [exercicios, setExercicios] = useState<Exercicio[]>(treino?.exercicios ?? []);
+
+  function atualizarExercicio(i: number, campo: keyof Exercicio, valor: string) {
+    setExercicios((prev) => prev.map((e, idx) => (idx === i ? { ...e, [campo]: valor } : e)));
+  }
+
+  function salvar() {
+    if (!titulo.trim()) {
+      toast("Dê um título à divisão (ex.: Peito e tríceps).");
+      return;
+    }
+    // linhas sem nome de exercício não entram no treino
+    const validos = exercicios
+      .map((e) => ({ nome: e.nome.trim(), series: e.series.trim(), reps: e.reps.trim(), carga: e.carga.trim() }))
+      .filter((e) => e.nome);
+    onSalvar(titulo.trim(), validos);
+    toast("Treino salvo com sucesso.");
+  }
+
+  const campo = "min-w-0 rounded-[9px] border border-navy/16 px-2.5 py-2.5 text-sm";
+  return (
+    <div className="rounded-2xl border border-navy/10 bg-white p-[22px]">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-base font-bold">Editor de treino</div>
+          <div className="mt-1.5 flex items-center gap-2 text-xs text-navy/50">
+            Divisão {divisao} ·
+            <input
+              value={titulo}
+              onChange={(ev) => setTitulo(ev.target.value)}
+              maxLength={60}
+              placeholder="Título (ex.: Peito e tríceps)"
+              aria-label="Título da divisão"
+              className="min-w-0 rounded-[8px] border border-navy/16 px-2 py-1 text-xs text-navy"
+            />
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setExercicios((prev) => [...prev, { nome: "", series: "", reps: "", carga: "" }])}
+            className="flex items-center gap-1.5 rounded-[10px] border border-navy/18 px-3.5 py-2.5 text-[13px] font-bold text-navy transition hover:bg-navy/5"
+          >
+            <Plus size={15} /> Exercício
+          </button>
+          <button
+            type="button"
+            onClick={salvar}
+            className="whitespace-nowrap rounded-[10px] bg-navy px-4 py-2.5 text-[13px] font-bold text-white"
+          >
+            Salvar treino
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-[18px] flex flex-col gap-2.5">
+        <div className="grid grid-cols-[2.2fr_.8fr_.8fr_.8fr_36px] gap-2.5 text-[11px] font-bold uppercase tracking-wider text-navy/45">
+          <span>Exercício</span>
+          <span>Séries</span>
+          <span>Reps</span>
+          <span>Carga</span>
+          <span />
+        </div>
+        {exercicios.map((e, i) => (
+          <div key={i} className="grid grid-cols-[2.2fr_.8fr_.8fr_.8fr_36px] items-center gap-2.5">
+            <input
+              value={e.nome}
+              maxLength={80}
+              onChange={(ev) => atualizarExercicio(i, "nome", ev.target.value)}
+              placeholder="Nome do exercício"
+              className={campo}
+            />
+            <input value={e.series} maxLength={8} onChange={(ev) => atualizarExercicio(i, "series", ev.target.value)} className={campo} />
+            <input value={e.reps} maxLength={10} onChange={(ev) => atualizarExercicio(i, "reps", ev.target.value)} className={campo} />
+            <input value={e.carga} maxLength={14} onChange={(ev) => atualizarExercicio(i, "carga", ev.target.value)} className={campo} />
+            <button
+              type="button"
+              aria-label="Remover"
+              onClick={() => setExercicios((prev) => prev.filter((_, idx) => idx !== i))}
+              className="flex h-[38px] items-center justify-center rounded-[9px] border border-navy/12 text-navy/45 transition hover:border-danger hover:text-danger"
+            >
+              <X size={15} />
+            </button>
+          </div>
+        ))}
+        {exercicios.length === 0 && (
+          <p className="text-sm text-navy/50">Nenhum exercício nesta divisão. Clique em “Exercício” para começar.</p>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function InstrutorAlunoDetalhe() {
   const { id } = useParams();
   const navigate = useNavigate();
   const rotas = rotasPorArea(useLocation().pathname);
   const toast = useToast();
-  const { alunos, checkins } = useStore();
+  const {
+    alunos,
+    checkins,
+    treinos,
+    avaliacoes,
+    observacoes,
+    salvarTreino,
+    registrarAvaliacao,
+    registrarObservacao,
+  } = useStore();
   const { user } = useAuth();
 
   const [aba, setAba] = useState<Aba>("treino");
-  const [exercicios, setExercicios] = useState<Exercicio[]>(EXERCICIOS_PADRAO);
-  const [avaliacoes, setAvaliacoes] = useState(AVALIACOES_PADRAO);
-  const [observacoes, setObservacoes] = useState(OBSERVACOES_PADRAO);
+  const [divisao, setDivisao] = useState<Divisao>("A");
   const [novaObs, setNovaObs] = useState("");
   const [form, setForm] = useState({ peso: "", altura: "", gordura: "", cintura: "", obs: "" });
   const hoje = paraData(HOJE_DEMO);
@@ -70,10 +167,42 @@ export default function InstrutorAlunoDetalhe() {
     );
   }
 
-  function atualizarExercicio(i: number, campo: keyof Exercicio, valor: string) {
-    setExercicios((prev) =>
-      prev.map((e, idx) => (idx === i ? { ...e, [campo]: valor } : e)),
-    );
+  const instrutor = user?.nome ?? aluno.instrutor;
+  const treinoAtual = treinos.find((t) => t.alunoId === aluno.id && t.divisao === divisao);
+  const historico = maisRecentesPrimeiro(avaliacoes.filter((a) => a.alunoId === aluno.id));
+  const notas = observacoes
+    .filter((o) => o.alunoId === aluno.id)
+    .sort((a, b) => b.criadoEm.localeCompare(a.criadoEm));
+
+  function registrar() {
+    if (!form.peso.trim() || !form.altura.trim()) {
+      toast("Preencha ao menos peso e altura.");
+      return;
+    }
+    const peso = lerNumero(form.peso);
+    const altura = lerNumero(form.altura);
+    const gordura = form.gordura.trim() ? lerNumero(form.gordura) : undefined;
+    const cintura = form.cintura.trim() ? lerNumero(form.cintura) : undefined;
+    if (!(peso >= 20 && peso <= 400) || !(altura >= 0.5 && altura <= 2.8)) {
+      toast("Confira o peso (em kg) e a altura (em metros, ex.: 1,78).");
+      return;
+    }
+    if ((gordura !== undefined && !(gordura >= 1 && gordura <= 70)) || (cintura !== undefined && !(cintura >= 20 && cintura <= 300))) {
+      toast("Confira o % de gordura e a cintura (em cm).");
+      return;
+    }
+    registrarAvaliacao({
+      alunoId: aluno!.id,
+      data: HOJE_DEMO,
+      instrutor,
+      peso,
+      altura,
+      gordura,
+      cintura,
+      obs: form.obs.trim() || undefined,
+    });
+    setForm({ peso: "", altura: "", gordura: "", cintura: "", obs: "" });
+    toast("Avaliação registrada.");
   }
 
   return (
@@ -89,14 +218,12 @@ export default function InstrutorAlunoDetalhe() {
       <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-navy/10 bg-white p-[22px]">
         <div className="flex items-center gap-3.5">
           <div className="font-display flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-navy text-xl font-bold text-neon">
-            {aluno!.nome.split(" ").slice(0, 2).map((p) => p[0]).join("")}
+            {aluno.nome.split(" ").slice(0, 2).map((p) => p[0]).join("")}
           </div>
           <div>
-            <div className="font-display text-[26px] font-bold text-navy">
-              {aluno!.nome}
-            </div>
+            <div className="font-display text-[26px] font-bold text-navy">{aluno.nome}</div>
             <div className="text-[13px] text-navy/55">
-              {aluno!.plano} · matrícula {aluno!.matricula}
+              {aluno.plano} · matrícula {aluno.matricula}
             </div>
           </div>
         </div>
@@ -111,9 +238,7 @@ export default function InstrutorAlunoDetalhe() {
               type="button"
               onClick={() => setAba(t.k)}
               className={`rounded-[9px] border px-[15px] py-2.5 text-[13px] font-bold ${
-                aba === t.k
-                  ? "border-navy bg-navy text-white"
-                  : "border-navy/15 bg-white text-navy/60"
+                aba === t.k ? "border-navy bg-navy text-white" : "border-navy/15 bg-white text-navy/60"
               }`}
             >
               {t.label}
@@ -123,77 +248,29 @@ export default function InstrutorAlunoDetalhe() {
       </div>
 
       {aba === "treino" && (
-        <div className="rounded-2xl border border-navy/10 bg-white p-[22px]">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <div className="text-base font-bold">Editor de treino</div>
-              <div className="text-xs text-navy/50">Divisão A · Peito e tríceps</div>
-            </div>
-            <div className="flex gap-2">
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-wrap gap-2">
+            {DIVISOES.map((d) => (
               <button
+                key={d}
                 type="button"
-                onClick={() =>
-                  setExercicios((prev) => [
-                    ...prev,
-                    { nome: "", series: "", reps: "", carga: "" },
-                  ])
-                }
-                className="flex items-center gap-1.5 rounded-[10px] border border-navy/18 px-3.5 py-2.5 text-[13px] font-bold text-navy transition hover:bg-navy/5"
+                onClick={() => setDivisao(d)}
+                className={`rounded-[9px] border px-[15px] py-2 text-[13px] font-bold ${
+                  d === divisao ? "border-navy bg-navy text-white" : "border-navy/15 bg-white text-navy/60"
+                }`}
               >
-                <Plus size={15} /> Exercício
+                Divisão {d}
               </button>
-              <button
-                type="button"
-                onClick={() => toast("Treino salvo com sucesso.")}
-                className="whitespace-nowrap rounded-[10px] bg-navy px-4 py-2.5 text-[13px] font-bold text-white"
-              >
-                Salvar treino
-              </button>
-            </div>
-          </div>
-
-          <div className="mt-[18px] flex flex-col gap-2.5">
-            <div className="grid grid-cols-[2.2fr_.8fr_.8fr_.8fr_36px] gap-2.5 text-[11px] font-bold uppercase tracking-wider text-navy/45">
-              <span>Exercício</span>
-              <span>Séries</span>
-              <span>Reps</span>
-              <span>Carga</span>
-              <span />
-            </div>
-            {exercicios.map((e, i) => (
-              <div key={i} className="grid grid-cols-[2.2fr_.8fr_.8fr_.8fr_36px] items-center gap-2.5">
-                <input
-                  value={e.nome}
-                  onChange={(ev) => atualizarExercicio(i, "nome", ev.target.value)}
-                  placeholder="Nome do exercício"
-                  className="min-w-0 rounded-[9px] border border-navy/16 px-2.5 py-2.5 text-sm"
-                />
-                <input
-                  value={e.series}
-                  onChange={(ev) => atualizarExercicio(i, "series", ev.target.value)}
-                  className="min-w-0 rounded-[9px] border border-navy/16 px-2.5 py-2.5 text-sm"
-                />
-                <input
-                  value={e.reps}
-                  onChange={(ev) => atualizarExercicio(i, "reps", ev.target.value)}
-                  className="min-w-0 rounded-[9px] border border-navy/16 px-2.5 py-2.5 text-sm"
-                />
-                <input
-                  value={e.carga}
-                  onChange={(ev) => atualizarExercicio(i, "carga", ev.target.value)}
-                  className="min-w-0 rounded-[9px] border border-navy/16 px-2.5 py-2.5 text-sm"
-                />
-                <button
-                  type="button"
-                  aria-label="Remover"
-                  onClick={() => setExercicios((prev) => prev.filter((_, idx) => idx !== i))}
-                  className="flex h-[38px] items-center justify-center rounded-[9px] border border-navy/12 text-navy/45 transition hover:border-danger hover:text-danger"
-                >
-                  <X size={15} />
-                </button>
-              </div>
             ))}
           </div>
+          <EditorTreino
+            key={`${aluno.id}-${divisao}-${treinoAtual?.atualizadoEm ?? "novo"}`}
+            divisao={divisao}
+            treino={treinoAtual}
+            onSalvar={(titulo, exercicios) =>
+              salvarTreino({ alunoId: aluno.id, divisao, titulo, exercicios, atualizadoPor: instrutor })
+            }
+          />
         </div>
       )}
 
@@ -251,6 +328,7 @@ export default function InstrutorAlunoDetalhe() {
               Observação
               <textarea
                 value={form.obs}
+                maxLength={500}
                 onChange={(e) => setForm({ ...form, obs: e.target.value })}
                 rows={3}
                 placeholder="Evolução, restrições, orientações…"
@@ -262,24 +340,7 @@ export default function InstrutorAlunoDetalhe() {
             </p>
             <button
               type="button"
-              onClick={() => {
-                if (!form.peso || !form.altura) {
-                  toast("Preencha ao menos peso e altura.");
-                  return;
-                }
-                setAvaliacoes((prev) => [
-                  {
-                    data: "14/09/2026",
-                    peso: `${form.peso} kg`,
-                    altura: `${form.altura} m`,
-                    gordura: form.gordura ? `${form.gordura}%` : "—",
-                    medidas: form.cintura ? `cintura ${form.cintura} cm` : "—",
-                  },
-                  ...prev,
-                ]);
-                setForm({ peso: "", altura: "", gordura: "", cintura: "", obs: "" });
-                toast("Avaliação registrada.");
-              }}
+              onClick={registrar}
               className="mt-3.5 w-full rounded-[10px] bg-navy py-3 text-sm font-bold text-white"
             >
               Registrar avaliação
@@ -292,17 +353,21 @@ export default function InstrutorAlunoDetalhe() {
                 Histórico do aluno
               </div>
               <div className="mt-3.5 flex flex-col gap-3">
-                {avaliacoes.map((a, i) => (
-                  <div key={i} className="rounded-xl border border-navy/[.09] p-3.5">
+                {historico.map((a) => (
+                  <div key={a.id} className="rounded-xl border border-navy/[.09] p-3.5">
                     <div className="flex justify-between text-[13px] font-bold">
-                      <span>{a.data}</span>
-                      <span className="text-teal-mid">{a.peso}</span>
+                      <span>{dataBr(a.data)}</span>
+                      <span className="text-teal-mid">{virgula(a.peso, 1)} kg</span>
                     </div>
                     <div className="mt-1 text-xs text-navy/55">
-                      % gordura {a.gordura} · altura {a.altura} · {a.medidas}
+                      % gordura {a.gordura !== undefined ? `${virgula(a.gordura, 1)}%` : "—"} · altura{" "}
+                      {virgula(a.altura, 2)} m · {medidas(a)}
                     </div>
                   </div>
                 ))}
+                {historico.length === 0 && (
+                  <p className="text-sm text-navy/50">Nenhuma avaliação registrada ainda.</p>
+                )}
               </div>
             </div>
 
@@ -313,6 +378,7 @@ export default function InstrutorAlunoDetalhe() {
               <div className="mt-3.5 flex gap-2">
                 <input
                   value={novaObs}
+                  maxLength={500}
                   onChange={(e) => setNovaObs(e.target.value)}
                   placeholder="Registrar observação…"
                   className="min-w-0 flex-1 rounded-[9px] border border-navy/16 px-2.5 py-2.5 text-sm"
@@ -321,10 +387,7 @@ export default function InstrutorAlunoDetalhe() {
                   type="button"
                   onClick={() => {
                     if (!novaObs.trim()) return;
-                    setObservacoes((prev) => [
-                      { texto: novaObs, instrutor: "Carla Menezes", criadoEm: "14/09/2026 agora" },
-                      ...prev,
-                    ]);
+                    registrarObservacao({ alunoId: aluno.id, texto: novaObs.trim(), instrutor });
                     setNovaObs("");
                   }}
                   className="shrink-0 whitespace-nowrap rounded-[9px] bg-navy px-4 py-2.5 text-[13px] font-bold text-white"
@@ -333,14 +396,15 @@ export default function InstrutorAlunoDetalhe() {
                 </button>
               </div>
               <div className="mt-3.5 flex flex-col gap-2.5">
-                {observacoes.map((o, i) => (
-                  <div key={i} className="border-l-[3px] border-teal/50 py-0.5 pl-3">
+                {notas.map((o) => (
+                  <div key={o.id} className="border-l-[3px] border-teal/50 py-0.5 pl-3">
                     <p className="text-[13px] leading-relaxed">{o.texto}</p>
                     <div className="mt-1 text-[11px] text-navy/45">
-                      {o.instrutor} · {o.criadoEm}
+                      {o.instrutor} · {dataBr(o.criadoEm.slice(0, 10))} {o.criadoEm.slice(11, 16)}
                     </div>
                   </div>
                 ))}
+                {notas.length === 0 && <p className="text-sm text-navy/50">Nenhuma observação ainda.</p>}
               </div>
             </div>
           </div>

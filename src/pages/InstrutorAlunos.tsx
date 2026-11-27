@@ -54,6 +54,11 @@ export default function InstrutorAlunos({
                 {a.plano} · último check-in {a.ultimo}
               </div>
             </div>
+            {a.cancelamento && (
+              <span className="rounded-full bg-navy/[.08] px-2.5 py-1 text-[11px] font-bold text-navy/70">
+                Matrícula cancelada
+              </span>
+            )}
             {a.alerta && (
               <span className="rounded-full bg-danger/10 px-2.5 py-1 text-[11px] font-bold text-danger-dark">
                 {a.alerta}

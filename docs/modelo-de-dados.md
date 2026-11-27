@@ -1,3 +1,25 @@
+> **Estado atual (nov/2026):** o app lê e grava nas tabelas pela API de dados (`backend/dados/api/index.mjs`, rotas `GET /dados`,
+> `PUT /dados/{colecao}/{id}` e `DELETE /dados/pagamentos/{id}`). Os documentos têm o **formato do app** (`src/data/store.tsx`:
+> ids numéricos, valores como texto `R$ 129,90`, datas dos pagamentos em `DD/MM/AAAA`) mais as chaves de cada tabela, e não o formato
+> idealizado nas seções abaixo, que ficam como referência de uma futura normalização. O que vale hoje:
+>
+> | Coleção do app | Tabela | Chave | Quem lê | Quem grava |
+> |---|---|---|---|---|
+> | `alunos` | `pessoas` | `pessoaId` = `A#<id>` | admin e recepção: todos; instrutor: os dele; aluno: o próprio | recepção e admin |
+> | `usuarios` | `pessoas` | `pessoaId` = `U#<id>` | admin: todos; os demais: só o próprio | admin |
+> | `planos` | `planos` | `planoId` | todos | admin |
+> | `pagamentos` | `pagamentos` | `pagamentoId` | admin e recepção: todos; aluno: os próprios | recepção e admin; o aluno só marca a própria parcela em aberto como paga via Pix (simulado) |
+> | `matriculas` | `matriculas` | `matriculaId` (`2026-0142`) | admin e recepção (instrutor e aluno não recebem); situação `ATIVA`, `VENCIDA` ou `CANCELADA`; no cancelamento por saída do aluno também `canceladaEm`, `motivo` e `multa` | recepção e admin |
+> | `checkins` | `checkins` | `alunoId` + `dataId` (`data#id`) | admin e recepção: todos; instrutor: dos alunos dele; aluno: os próprios | aluno (os próprios), recepção e admin; só dá para acrescentar a remoção, nunca apagar |
+> | `treinos` | `treinos` | `alunoId` + `divisao` (A, B, C) | admin; instrutor (dos alunos dele); aluno (o próprio) | instrutor (só dos alunos dele) e admin |
+> | `avaliacoes` | `avaliacoes` | `alunoId` + `dataId` (`data#id`) | idem treinos | idem treinos |
+> | `observacoes` | `observacoes` | `alunoId` + `criadoEm` | admin e instrutor (dos alunos dele); o aluno **não** vê | instrutor (só dos alunos dele) e admin |
+> | `exportacoes` | `exportacoes` | `relatorio` + `criadoEm` | admin | admin (histórico dos PDFs gerados em Relatórios; campos `id`, `relatorio`, `periodo`, `por`, `criadoEm`) |
+> | `notificacoes` | `notificacoes` | `destino` (`usuario#<e-mail do login>`, posto pelo servidor) + `criadoEm` | cada pessoa lê só as suas | cada pessoa grava só as suas (as notificações que já leu; o texto é calculado dos dados pelo app) |
+>
+> A ligação entre o login (Cognito) e o cadastro é o atributo `loginEmails` de `alunos` e `usuarios`, gravado só pela carga inicial
+> (`backend/dados/carregar-demo.mjs`) e nunca aceito pela API. Para voltar à demonstração limpa depois de testes: `node backend/dados/carregar-demo.mjs --forcar --limpar` (regrava o demo e apaga o que não faz parte dele).
+
 # Modelo de dados (DynamoDB)
 
 Tabelas do GymFlow na conta do laboratório do projeto (`us-east-1`), todas no modo **on-demand**. O nome segue o padrão
@@ -186,7 +208,7 @@ O IMC é calculado a partir do peso e da altura.
 | `texto` | S | sim | `Igor Bezerra está com a mensalidade vencida…` |
 | `lida` | BOOL | sim | |
 
-Hoje os textos são fixos nos layouts; com a tabela, o job diário (RF22 a RF24) os gera.
+Hoje os textos são calculados dos dados pelo app (`src/lib/notificacoes.ts`) e a tabela guarda só o que cada pessoa já leu (`destino`, `criadoEm` = instante da leitura, `tipo`, `texto`, `lida`).
 
 ### `exportacoes`
 - **Chave**: `relatorio` + `criadoEm`.
@@ -199,8 +221,20 @@ Hoje os textos são fixos nos layouts; com a tabela, o job diário (RF22 a RF24)
 | `geradoPor` | S | sim | nome do administrador |
 | `arquivoKey` | S | sim | PDF no S3 |
 
+### `sessoes`: memória do agente de IA (Strands Agents)
+Gravada pela Lambda do `POST /chat` (`backend/agente/lambda_chat.py`): a Lambda não guarda estado, então o histórico da conversa
+de cada usuário fica aqui.
+- **Chave**: `sessaoId` (partição).
+
+| Atributo | Tipo | Obrigatório | Observação / exemplo |
+|---|---|---|---|
+| `sessaoId` | S | sim | `usuario-<sub do Cognito>` (ou `teste-<nome>` em chamadas sem login, como no teste do console) |
+| `mensagens` | S | sim | histórico em JSON (formato de mensagens do Strands: texto, chamadas de ferramenta e resultados), até as últimas 20 |
+| `atualizadoEm` | S | sim | instante ISO |
+| `expira` | N | sim | segundos desde 1970 (TTL ligado): a conversa some 30 dias depois da última mensagem |
+
 ## Fora do banco por enquanto
-- **Mensagens do chat**: o assistente não guarda histórico; cada pergunta é respondida na hora. Se for guardar, entra uma tabela `conversas` (`usuario` + `criadoEm`).
+- **Mensagens do chat do assistente do sistema** (WebSocket + Gemini): esse assistente não guarda histórico; cada pergunta é respondida na hora. A memória só existe no agente Strands (tabela `sessoes`).
 - **Senhas e contas**: ficam no Cognito, nunca em tabela.
 
 ## Próximo passo para o app usar as tabelas

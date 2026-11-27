@@ -80,7 +80,7 @@ async function chamar(init: RequestInit) {
   }
 }
 
-function blobParaBase64(blob: Blob): Promise<string> {
+export function blobParaBase64(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const leitor = new FileReader();
     leitor.onload = () => resolve(String(leitor.result).split(",")[1] ?? "");

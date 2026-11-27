@@ -10,6 +10,8 @@ import {
   Wallet,
 } from "lucide-react";
 import AppShell, { type MenuItem } from "../components/AppShell";
+import { useStore } from "../data/store";
+import { notificacoesDoAdmin } from "../lib/notificacoes";
 
 const ADMIN_MENU: MenuItem[] = [
   {
@@ -54,34 +56,13 @@ const ADMIN_MENU: MenuItem[] = [
   },
 ];
 
-const NOTIFICACOES_ADMIN = [
-  {
-    tipo: "Indicador",
-    texto:
-      "Inadimplência subiu para 5,8% no mês — 0,7 p.p. acima de agosto.",
-    quando: "hoje",
-    lida: false,
-  },
-  {
-    tipo: "Relatório",
-    texto: "Relatório de receita de agosto disponível para exportação em PDF.",
-    quando: "há 2 dias",
-    lida: false,
-  },
-  {
-    tipo: "Usuários",
-    texto: "Conta de Igor Bezerra foi bloqueada por Júlia Alves.",
-    quando: "há 3 dias",
-    lida: true,
-  },
-];
-
 export default function AdminLayout() {
+  const { alunos, pagamentos } = useStore();
   return (
     <AppShell
       menuItems={ADMIN_MENU}
       roleLabel="Administrador"
-      notifications={NOTIFICACOES_ADMIN}
+      notifications={notificacoesDoAdmin(alunos, pagamentos)}
       notifFooter="Alertas operacionais do perfil Administrador, gerados pelo job diário (RF22–RF24)."
     >
       <Outlet />

@@ -51,7 +51,10 @@ export function porSemana(lista: Checkin[], alunoId: number, semanas = 8, hoje =
   });
 }
 
-export function bloqueioDoAluno(a: { fin: string; fim: string }, hoje = HOJE_DEMO) {
+export function bloqueioDoAluno(a: { fin: string; fim: string; cancelamento?: unknown }, hoje = HOJE_DEMO) {
+  if (a.cancelamento) {
+    return "Matrícula cancelada: faça uma nova matrícula para liberar o check-in.";
+  }
   if (a.fin === "Atrasado") {
     return "Mensalidade em atraso: check-in bloqueado (regra de negócio 1).";
   }

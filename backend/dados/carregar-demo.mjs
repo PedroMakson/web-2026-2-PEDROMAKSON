@@ -57,10 +57,14 @@ async function carregarDemo() {
       const js = ts.transpileModule(fonte, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } });
       writeFileSync(
         path.join(tmp, destino),
-        js.outputText.replace(/"\.\.\/lib\/datas"/g, '"./datas.mjs"').replace(/"\.\/aluno"/g, '"./aluno.mjs"'),
+        js.outputText
+          .replace(/"\.\.\/lib\/(datas|pessoa|endereco)"/g, '"./$1.mjs"')
+          .replace(/"\.\/(aluno|endereco)"/g, '"./$1.mjs"'),
       );
     };
     transpilar("src/lib/datas.ts", "datas.mjs");
+    transpilar("src/lib/endereco.ts", "endereco.mjs");
+    transpilar("src/lib/pessoa.ts", "pessoa.mjs");
     transpilar("src/data/aluno.ts", "aluno.mjs");
     transpilar("src/data/demo.ts", "demo.mjs");
     return await import(pathToFileURL(path.join(tmp, "demo.mjs")).href);

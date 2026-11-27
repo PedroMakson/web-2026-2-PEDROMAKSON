@@ -1,7 +1,7 @@
 import { type Aluno, type Avaliacao, brl, mesesPlano, type Pagamento, type Plano, valorNum } from "../data/store";
 import type { Checkin } from "./checkins";
 import type { Matricula } from "./dadosApi";
-import { dataBrParaIso, HOJE_DEMO, somarDias, somarMeses } from "./datas";
+import { dataBrParaIso, diferencaDias, HOJE_DEMO, somarDias, somarMeses } from "./datas";
 
 // Indicadores calculados dos dados do sistema (alunos, parcelas, check-ins, avaliações). Os painéis e os PDFs de
 // relatório usam estas mesmas contas, então o que aparece na tela é o que sai no arquivo.
@@ -21,6 +21,14 @@ export const janela = (dias: number, hoje = HOJE_DEMO, deslocamento = 0): Janela
   const fim = somarDias(hoje, -dias * deslocamento);
   return { inicio: somarDias(fim, -dias), fim, dias };
 };
+// Período entre duas datas (as duas inclusive): é o que o filtro de início e fim dos relatórios usa.
+export const janelaEntre = (inicio: string, fim: string): Janela => ({
+  inicio: somarDias(inicio, -1),
+  fim,
+  dias: diferencaDias(fim, inicio) + 1,
+});
+// O período de mesmo tamanho imediatamente antes (serve de base para as variações).
+export const janelaAnterior = (j: Janela): Janela => ({ inicio: somarDias(j.inicio, -j.dias), fim: j.inicio, dias: j.dias });
 const dentro = (iso: string | null | undefined, j: Janela) => !!iso && iso > j.inicio && iso <= j.fim;
 
 export const pagoEmIso = (p: Pagamento) => (p.pagoEm ? dataBrParaIso(p.pagoEm) : null);
@@ -109,13 +117,37 @@ export function serieDeReceita(pagamentos: Pagamento[], dias: number, hoje = HOJ
   });
 }
 
+// Receita dentro de um período qualquer: por semana (até ~2 meses) ou por mês do calendário.
+export function serieNoPeriodo(pagamentos: Pagamento[], j: Janela) {
+  if (j.dias <= 62) {
+    const semanas = Math.min(9, Math.ceil(j.dias / 7));
+    return Array.from({ length: semanas }, (_, i) => {
+      const fim = somarDias(j.fim, -7 * (semanas - 1 - i));
+      const recorte: Janela = { inicio: somarDias(fim, -7) < j.inicio ? j.inicio : somarDias(fim, -7), fim, dias: 7 };
+      return { rotulo: fim.slice(8) + "/" + fim.slice(5, 7), valor: receitaNa(pagamentos, recorte) };
+    });
+  }
+  const primeiro = somarDias(j.inicio, 1).slice(0, 8) + "01";
+  const meses: string[] = [];
+  for (let m = primeiro; m.slice(0, 7) <= j.fim.slice(0, 7) && meses.length < 12; m = somarMeses(m, 1)) meses.push(m.slice(0, 7));
+  const mudaDeAno = meses[0].slice(0, 4) !== meses[meses.length - 1].slice(0, 4);
+  return meses.map((prefixo) => ({
+    rotulo: MESES[Number(prefixo.slice(5, 7)) - 1] + (mudaDeAno ? `/${prefixo.slice(2, 4)}` : ""),
+    valor: pagamentos
+      .filter((p) => p.pago && (pagoEmIso(p) ?? "").startsWith(prefixo) && dentro(pagoEmIso(p), j))
+      .reduce((t, p) => t + valorNum(p.valor), 0),
+  }));
+}
+
 export const percentual = (n: number) => `${n.toFixed(1).replace(".", ",")}%`;
 export const sinal = (n: number, unidade: string) => `${n >= 0 ? "+" : "−"}${Math.abs(n).toFixed(1).replace(".", ",")}${unidade}`;
 
 // Tudo o que o painel do administrador e o relatório de receita mostram para um período.
-export function indicadoresDoPeriodo(dados: Dados, dias: number) {
-  const atual = janela(dias);
-  const anterior = janela(dias, HOJE_DEMO, 1);
+// `periodo`: N dias até hoje (painel) ou uma janela entre duas datas (relatórios).
+export function indicadoresDoPeriodo(dados: Dados, periodo: number | Janela) {
+  const atual = typeof periodo === "number" ? janela(periodo) : periodo;
+  const dias = atual.dias;
+  const anterior = janelaAnterior(atual);
   const receita = receitaNa(dados.pagamentos, atual);
   const receitaAnterior = receitaNa(dados.pagamentos, anterior);
   const inad = inadimplenciaNa(dados.pagamentos, atual);
@@ -138,6 +170,6 @@ export function indicadoresDoPeriodo(dados: Dados, dias: number) {
     totalCheckins: feitos.length,
     faixas: faixasNa(dados.checkins, atual),
     origens: origensNa(dados.checkins, atual),
-    serie: serieDeReceita(dados.pagamentos, dias),
+    serie: typeof periodo === "number" ? serieDeReceita(dados.pagamentos, dias) : serieNoPeriodo(dados.pagamentos, atual),
   };
 }

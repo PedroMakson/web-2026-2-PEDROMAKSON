@@ -166,6 +166,7 @@ const CAMPOS = {
     periodo: [texto(30), true],
     por: [texto(120), true],
     criadoEm: [texto(40), true],
+    formato: [opcao("PDF", "Excel"), false],
   },
   checkins: {
     id: [inteiro, true],

@@ -64,7 +64,7 @@ Regras:
 - o **Instrutor** só consulta (aba Frequência do aluno), com os retroativos destacados;
 - o painel do Administrador mostra os check-ins por origem nos últimos 30 dias.
 
-Como os dados são de demonstração, o "hoje" é fixo em 14/09/2026 (`HOJE_DEMO`, em `src/lib/datas.ts`).
+O "hoje" do sistema é a data real (`HOJE_DEMO`, em `src/lib/datas.ts`). Os dados de demonstração (`src/data/demo.ts`) são escritos em relação a ele: ao gravá-los no banco com `node backend/dados/carregar-demo.mjs --forcar --limpar`, as datas ficam deslocadas para o dia da carga (o que vence em 3 dias continua vencendo em 3 dias). Rode de novo no dia da apresentação.
 
 ## Perfil do usuário (S3 + DynamoDB + HTTP API + Lambda)
 
@@ -163,7 +163,7 @@ src/
 backend/
   perfil/       Lambda do PUT/GET /profile (S3 + DynamoDB) e seus testes
   dados/        script que cria as tabelas DynamoDB do projeto
-  agente/       agente de IA em Python (Strands Agents + Gemini): lembra da conversa e informa a hora certa (NTP.br)
+  agente/       agente de IA em Python (Strands Agents + Gemini): guarda o histórico da conversa por usuário e informa a hora certa (NTP.br)
   chat.mjs, authorizer.mjs, conhecimento.mjs   assistente de chat (Lambdas e base de conhecimento)
 docs/           modelo de dados (DynamoDB)
 ```

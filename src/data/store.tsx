@@ -13,7 +13,7 @@ import {
 } from "../lib/dadosApi";
 import { simularCancelamento } from "../lib/cancelamento";
 import type { Endereco } from "../lib/endereco";
-import type { Sexo } from "../lib/pessoa";
+import { formatarDataBr, type Sexo } from "../lib/pessoa";
 import {
   bloqueioDoAluno,
   type Checkin,
@@ -133,6 +133,7 @@ export type Exportacao = {
   relatorio: string;
   periodo: string;
   por: string;
+  formato?: "PDF" | "Excel";
   criadoEm: string; // instante ISO
 };
 
@@ -149,7 +150,7 @@ export const brl = (n: number) =>
 export const valorNum = (v: string) =>
   Number(String(v).replace(/[^\d,]/g, "").replace(".", "").replace(",", ".")) || 0;
 export const mesesPlano = (d: string) => parseInt(String(d), 10) || 1;
-// As parcelas de um plano (valor dividido pela duração), uma por mês a partir de setembro/2026 no dia escolhido.
+// As parcelas de um plano (valor dividido pela duração), uma por mês a partir do mês que vem, no dia escolhido.
 function gerarParcelas(nome: string, plano: Plano | undefined, dia: string): Pagamento[] {
   if (!plano || !dia) return [];
   const n = mesesPlano(plano.duracao);
@@ -168,9 +169,11 @@ function gerarParcelas(nome: string, plano: Plano | undefined, dia: string): Pag
 }
 
 export const somaMes = (dia: string, i: number) => {
-  const base = 9 + i;
-  const mes = ((base - 1) % 12) + 1;
-  const ano = 2026 + Math.floor((base - 1) / 12);
+  // i meses depois do mês de hoje
+  const [ano0, mes0] = HOJE_DEMO.split("-").map(Number);
+  const total = ano0 * 12 + (mes0 - 1) + i;
+  const mes = (total % 12) + 1;
+  const ano = Math.floor(total / 12);
   return String(dia).padStart(2, "0") + "/" + String(mes).padStart(2, "0") + "/" + ano;
 };
 
@@ -189,7 +192,7 @@ type StoreValue = {
   cancelarMatricula: (alunoId: number, motivo: string, por: string) => { ok: boolean; motivo?: string; mensagem?: string };
   notificacoesLidas: NotificacaoLida[];
   marcarNotificacoesLidas: (itens: { tipo: string; texto: string }[]) => void;
-  registrarExportacao: (d: Pick<Exportacao, "relatorio" | "periodo" | "por">) => void;
+  registrarExportacao: (d: Pick<Exportacao, "relatorio" | "periodo" | "por" | "formato">) => void;
   toggleAcessoAluno: (id: number) => void;
   checkins: Checkin[];
   registrarCheckin: (d: {
@@ -473,7 +476,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   function registrarPagamento(id: number, forma: string, origem: "Recepção" | "App" = "Recepção") {
     const pagamento = pagamentos.find((p) => p.id === id);
     if (!pagamento) return;
-    const pago: Pagamento = { ...pagamento, pago: true, atraso: false, forma, pagoEm: "14/09/2026", origem };
+    const pago: Pagamento = { ...pagamento, pago: true, atraso: false, forma, pagoEm: formatarDataBr(HOJE_DEMO), origem };
     setPagamentos((prev) => prev.map((p) => (p.id === id ? pago : p)));
     const atrasado = pagamentos.some((p) => p.id !== id && p.nome === pagamento.nome && !p.pago && p.atraso);
     setAlunos((prev) =>
@@ -654,7 +657,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     for (const n of novas) gravar("notificacoes", n);
   }
 
-  function registrarExportacao(d: Pick<Exportacao, "relatorio" | "periodo" | "por">) {
+  function registrarExportacao(d: Pick<Exportacao, "relatorio" | "periodo" | "por" | "formato">) {
     const exportacao: Exportacao = { ...d, id: Date.now(), criadoEm: new Date().toISOString() };
     setExportacoes((prev) => [exportacao, ...prev]);
     gravar("exportacoes", exportacao);
@@ -667,7 +670,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }
 
   function registrarObservacao(d: Omit<Observacao, "id" | "criadoEm">) {
-    // o "hoje" da demonstração é fixo (14/09/2026); a hora é a de agora
+    // a data é a de hoje e a hora é a de agora
     const observacao: Observacao = {
       ...d,
       id: Date.now(),

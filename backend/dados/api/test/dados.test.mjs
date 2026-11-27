@@ -561,6 +561,8 @@ describe("exportações de relatório (só administração)", () => {
   it("recusa campo desconhecido e valor inválido", async () => {
     const { gravar } = await ambiente();
     assert.equal((await gravar("admin", "exportacoes", exportacao(1, { arquivo: "x.pdf" }))).statusCode, 400);
+    assert.equal((await gravar("admin", "exportacoes", exportacao(1, { formato: "Word" }))).statusCode, 400);
+    assert.equal((await gravar("admin", "exportacoes", exportacao(2, { formato: "Excel" }))).statusCode, 200);
     assert.equal((await gravar("admin", "exportacoes", exportacao(1, { periodo: "" }))).statusCode, 400);
   });
 });

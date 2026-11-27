@@ -8,8 +8,9 @@ import EnderecoFields from "../components/EnderecoFields";
 import TrocaPlanoPainel from "../components/TrocaPlanoPainel";
 import Obrigatorio from "../components/Obrigatorio";
 import { ENDERECO_VAZIO, soDigitos, validarEndereco } from "../lib/endereco";
-import { type DadosPessoais, validarDadosPessoais } from "../lib/pessoa";
+import { type DadosPessoais, formatarDataBr, validarDadosPessoais } from "../lib/pessoa";
 import { rotasPorArea } from "../lib/rotas";
+import { HOJE_DEMO } from "../lib/datas";
 
 const PLANOS_DIAS_VENC = ["Todo dia 05", "Todo dia 10", "Todo dia 15", "Todo dia 20"];
 
@@ -36,7 +37,7 @@ export default function RecepcaoMatricula() {
   });
 
   const [plano, setPlano] = useState(editando?.plano ?? "Mensal Fit");
-  const [inicio, setInicio] = useState("15/09/2026");
+  const [inicio, setInicio] = useState(formatarDataBr(HOJE_DEMO));
   const [diaVenc, setDiaVenc] = useState("Todo dia 15");
   const [diaTroca, setDiaTroca] = useState("Todo dia 10");
   const [planoLiberado, setPlanoLiberado] = useState(false);

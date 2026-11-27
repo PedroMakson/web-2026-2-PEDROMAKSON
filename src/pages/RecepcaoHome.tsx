@@ -3,13 +3,13 @@ import { useNavigate } from "react-router-dom";
 import { brl, useStore } from "../data/store";
 import TrocaPlanoModal from "../components/TrocaPlanoModal";
 import { formatarDataBr } from "../lib/pessoa";
-import { HOJE_DEMO } from "../lib/datas";
+import { HOJE_DEMO, paraData } from "../lib/datas";
 import { janela, matriculasNa } from "../lib/indicadores";
 
 function diasAte(fim: string) {
   const [d, m, a] = fim.split("/").map(Number);
   const alvo = new Date(a, m - 1, d);
-  const hoje = new Date(2026, 8, 14);
+  const hoje = paraData(HOJE_DEMO);
   return Math.round((alvo.getTime() - hoje.getTime()) / 86400000);
 }
 

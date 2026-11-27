@@ -208,7 +208,7 @@ export default function ChatBubble() {
               </div>
               <div className="mt-0.5 flex items-center gap-1.5 text-[11px] font-semibold text-white/65">
                 <span className={`h-2 w-2 rounded-full ${disponivel ? "bg-neon" : "bg-white/40"}`} />
-                {disponivel ? "Online · lembra da conversa" : "Indisponível"}
+                {disponivel ? "Online" : "Indisponível"}
               </div>
             </div>
             <button

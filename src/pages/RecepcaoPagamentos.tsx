@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Search } from "lucide-react";
 import { useStore } from "../data/store";
 import { useToast } from "../components/Toast";
+import { dataBrParaIso, HOJE_DEMO } from "../lib/datas";
 
 const FILTROS = ["Mês atual", "Em atraso", "Futuras", "Todas"] as const;
 
@@ -23,7 +24,8 @@ export default function RecepcaoPagamentos() {
     if (q && !`${p.nome} ${p.plano}`.toLowerCase().includes(q)) return false;
     if (filtro === "Em atraso") return statusDe(p) === "Atrasado";
     if (filtro === "Futuras") return !p.pago && !p.atraso;
-    if (filtro === "Mês atual") return true;
+    // vencem neste mês ou já estão vencidas e em aberto
+    if (filtro === "Mês atual") return dataBrParaIso(p.venc).slice(0, 7) === HOJE_DEMO.slice(0, 7) || statusDe(p) === "Atrasado";
     return true;
   });
 

@@ -1,5 +1,6 @@
-// "Hoje" fixo da demonstração, o mesmo usado nas demais telas (14/09/2026).
-export const HOJE_DEMO = "2026-09-14";
+// "Hoje" do sistema: a data real (do computador de quem usa), a mesma em todas as telas. O nome ficou da época em que
+// a demonstração tinha um dia fixo; os dados de demonstração são escritos em relação a ele (veja src/data/demo.ts).
+export const HOJE_DEMO = paraIso(new Date());
 
 export const LETRA_DIA = ["D", "S", "T", "Q", "Q", "S", "S"];
 

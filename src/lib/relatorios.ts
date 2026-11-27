@@ -1,5 +1,6 @@
 import { jsPDF } from "jspdf";
-import autoTable, { type RowInput } from "jspdf-autotable";
+import autoTable from "jspdf-autotable";
+import writeExcelFile from "write-excel-file/universal";
 import { type Aluno, type Avaliacao, brl, valorNum } from "../data/store";
 import { imc, virgula } from "./avaliacao";
 import { dataBrParaIso, HOJE_DEMO, somarDias } from "./datas";
@@ -9,12 +10,13 @@ import {
   faixasNa,
   indicadoresDoPeriodo,
   inicioDaMatriculaDe,
-  janela,
+  type Janela,
+  janelaEntre,
   matriculasNa,
   origensNa,
   pagoEmIso,
   percentual,
-  serieDeReceita,
+  serieNoPeriodo,
 } from "./indicadores";
 import { formatarDataBr } from "./pessoa";
 
@@ -28,11 +30,16 @@ export const RELATORIOS = [
 ] as const;
 export type TituloRelatorio = (typeof RELATORIOS)[number]["titulo"];
 
-export const PERIODOS_RELATORIO = [
+// Atalhos do filtro de período; "Personalizado" deixa escolher o início e o fim.
+export const ATALHOS_PERIODO = [
   { rotulo: "Últimos 7 dias", dias: 7 },
   { rotulo: "Últimos 30 dias", dias: 30 },
   { rotulo: "Últimos 90 dias", dias: 90 },
+  { rotulo: "Personalizado", dias: 0 },
 ] as const;
+export const intervaloDoAtalho = (dias: number) => ({ inicio: somarDias(HOJE_DEMO, -(dias - 1)), fim: HOJE_DEMO });
+export const periodoTexto = (inicio: string, fim: string) => `${dataBr(inicio)} a ${dataBr(fim)}`;
+export { janelaEntre };
 
 const NAVY: [number, number, number] = [18, 33, 66];
 // as fontes padrão do PDF não têm o sinal de menos tipográfico
@@ -44,9 +51,24 @@ const dataHoraBr = (d: Date) =>
 
 type Contexto = Dados & { avaliacoes: Avaliacao[] };  // matriculas (opcional) traz os cancelamentos
 
-type Documento = { pdf: jsPDF; y: number };
+// Os relatórios montam um conteúdo neutro (seções, indicadores e tabelas) e depois ele é desenhado em PDF ou em Excel.
+type Item =
+  | { tipo: "secao"; titulo: string }
+  | { tipo: "indicadores"; itens: [string, string][] }
+  | { tipo: "tabela"; cabecalho: string[]; linhas: string[][]; vazio: string };
+type Documento = { itens: Item[] };
 
-function iniciar(titulo: string, rotuloPeriodo: string, dias: number, geradoPor: string): Documento {
+const secao = (doc: Documento, titulo: string) => void doc.itens.push({ tipo: "secao", titulo });
+const tabela = (doc: Documento, cabecalho: string[], linhas: string[][], vazio = "Nenhum registro no período.") =>
+  void doc.itens.push({ tipo: "tabela", cabecalho, linhas, vazio });
+const indicadores = (doc: Documento, itens: [string, string][]) => void doc.itens.push({ tipo: "indicadores", itens });
+
+const textoDoPeriodo = (rotuloPeriodo: string, j: Janela) =>
+  `${rotuloPeriodo} (${dataBr(somarDias(j.inicio, 1))} a ${dataBr(j.fim)} - ${j.dias} dia${j.dias === 1 ? "" : "s"})`;
+
+// ---------------------------------------------------------------- PDF
+
+function desenharPdf(doc: Documento, titulo: string, rotuloPeriodo: string, j: Janela, geradoPor: string) {
   const pdf = new jsPDF({ unit: "pt", format: "a4" });
   const largura = pdf.internal.pageSize.getWidth();
   pdf.setFillColor(...NAVY);
@@ -60,59 +82,53 @@ function iniciar(titulo: string, rotuloPeriodo: string, dias: number, geradoPor:
   pdf.text(titulo, 40, 56);
   pdf.setTextColor(...NAVY);
   pdf.setFontSize(10);
-  const j = janela(dias);
-  pdf.text(`Período: ${rotuloPeriodo} (${dataBr(somarDias(j.inicio, 1))} a ${dataBr(j.fim)})`, 40, 98);
+  pdf.text(`Período: ${textoDoPeriodo(rotuloPeriodo, j)}`, 40, 98);
   pdf.setTextColor(110, 110, 110);
   pdf.text(`Gerado por ${geradoPor} em ${dataHoraBr(new Date())}`, 40, 113);
-  return { pdf, y: 136 };
-}
 
-function secao(doc: Documento, titulo: string) {
-  if (doc.y > 730) {
-    doc.pdf.addPage();
-    doc.y = 50;
+  let y = 136;
+  const fim = () => (pdf as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY;
+  for (const item of doc.itens) {
+    if (item.tipo === "secao") {
+      if (y > 730) {
+        pdf.addPage();
+        y = 50;
+      }
+      pdf.setTextColor(...NAVY);
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(12);
+      pdf.text(item.titulo, 40, y);
+      y += 8;
+    } else if (item.tipo === "indicadores") {
+      autoTable(pdf, {
+        startY: y,
+        body: item.itens.map(([k, v]) => [k, sinalPdf(v)]),
+        theme: "plain",
+        margin: { left: 40, right: 40 },
+        styles: { fontSize: 10, cellPadding: 4, textColor: NAVY },
+        columnStyles: { 0: { fontStyle: "bold", cellWidth: 190 } },
+      });
+      y = fim() + 20;
+    } else if (item.linhas.length === 0) {
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(10);
+      pdf.setTextColor(110, 110, 110);
+      pdf.text(item.vazio, 40, y + 12);
+      y += 34;
+    } else {
+      autoTable(pdf, {
+        startY: y,
+        head: [item.cabecalho],
+        body: item.linhas.map((l) => l.map(sinalPdf)),
+        margin: { left: 40, right: 40 },
+        styles: { fontSize: 9, cellPadding: 5, textColor: NAVY },
+        headStyles: { fillColor: NAVY, textColor: 255 },
+        alternateRowStyles: { fillColor: [244, 247, 250] },
+      });
+      y = fim() + 24;
+    }
   }
-  doc.pdf.setTextColor(...NAVY);
-  doc.pdf.setFont("helvetica", "bold");
-  doc.pdf.setFontSize(12);
-  doc.pdf.text(titulo, 40, doc.y);
-  doc.y += 8;
-}
 
-function tabela(doc: Documento, cabecalho: string[], linhas: RowInput[], vazio = "Nenhum registro no período.") {
-  if (linhas.length === 0) {
-    doc.pdf.setFont("helvetica", "normal");
-    doc.pdf.setFontSize(10);
-    doc.pdf.setTextColor(110, 110, 110);
-    doc.pdf.text(vazio, 40, doc.y + 12);
-    doc.y += 34;
-    return;
-  }
-  autoTable(doc.pdf, {
-    startY: doc.y,
-    head: [cabecalho],
-    body: linhas,
-    margin: { left: 40, right: 40 },
-    styles: { fontSize: 9, cellPadding: 5, textColor: NAVY },
-    headStyles: { fillColor: NAVY, textColor: 255 },
-    alternateRowStyles: { fillColor: [244, 247, 250] },
-  });
-  doc.y = (doc.pdf as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 24;
-}
-
-function indicadores(doc: Documento, itens: [string, string][]) {
-  autoTable(doc.pdf, {
-    startY: doc.y,
-    body: itens.map(([k, v]) => [k, v]),
-    theme: "plain",
-    margin: { left: 40, right: 40 },
-    styles: { fontSize: 10, cellPadding: 4, textColor: NAVY },
-    columnStyles: { 0: { fontStyle: "bold", cellWidth: 190 } },
-  });
-  doc.y = (doc.pdf as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 20;
-}
-
-function rodape(pdf: jsPDF) {
   const total = pdf.getNumberOfPages();
   for (let i = 1; i <= total; i++) {
     pdf.setPage(i);
@@ -123,10 +139,90 @@ function rodape(pdf: jsPDF) {
     pdf.text("GymFlow - relatório gerado a partir dos dados do sistema", 40, height - 24);
     pdf.text(`Página ${i} de ${total}`, width - 40, height - 24, { align: "right" });
   }
+  return pdf;
 }
 
-function receita(doc: Documento, c: Contexto, dias: number) {
-  const ind = indicadoresDoPeriodo(c, dias);
+// ---------------------------------------------------------------- Excel
+
+type Celula = {
+  value: string | number | Date;
+  type?: StringConstructor | NumberConstructor | DateConstructor;
+  format?: string;
+  fontWeight?: "bold";
+  backgroundColor?: string;
+  textColor?: string;
+};
+
+// Os textos dos relatórios viram células de verdade: moeda, percentual, data e número ficam numéricos (dá para somar,
+// filtrar e ordenar no Excel); o resto continua texto.
+export function celulaDoTexto(texto: string): Celula {
+  const t = texto.trim();
+  const moeda = /^R\$ (-?[\d.]+,\d{2})$/.exec(t);
+  if (moeda) return { value: Number(moeda[1].replace(/\./g, "").replace(",", ".")), type: Number, format: '"R$" #,##0.00' };
+  const pct = /^(-?\d+(?:,\d+)?)%$/.exec(t);
+  if (pct) return { value: Number(pct[1].replace(",", ".")) / 100, type: Number, format: "0.0%" };
+  const data = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(t);
+  if (data) return { value: new Date(Date.UTC(Number(data[3]), Number(data[2]) - 1, Number(data[1]))), type: Date, format: "dd/mm/yyyy" };
+  if (/^-?\d+$/.test(t)) return { value: Number(t), type: Number };
+  const decimal = /^-?\d+,(\d+)$/.exec(t);
+  if (decimal) return { value: Number(t.replace(",", ".")), type: Number, format: decimal[1].length === 1 ? "0.0" : "0.00" };
+  return { value: texto };
+}
+
+const CABECALHO: Omit<Celula, "value"> = { fontWeight: "bold", backgroundColor: "#122142", textColor: "#FFFFFF" };
+
+// nome de aba do Excel: até 31 caracteres, sem \ / ? * [ ] :
+const nomeDeAba = (titulo: string, usados: Set<string>) => {
+  const base = titulo.replace(/[\\/?*[\]:]/g, " ").trim().slice(0, 28) || "Planilha";
+  let nome = base;
+  for (let n = 2; usados.has(nome.toLowerCase()); n++) nome = `${base} ${n}`;
+  usados.add(nome.toLowerCase());
+  return nome;
+};
+
+type Linha = (Celula | null)[];
+const larguras = (linhas: Linha[]) => {
+  const colunas = linhas.reduce((m, l) => Math.max(m, l.length), 0);
+  return Array.from({ length: colunas }, (_, c) => ({
+    width: Math.min(
+      48,
+      Math.max(10, ...linhas.map((l) => (l[c]?.value instanceof Date ? 12 : String(l[c]?.value ?? "").length + 2))),
+    ),
+  }));
+};
+
+async function desenharExcel(doc: Documento, titulo: string, rotuloPeriodo: string, j: Janela, geradoPor: string) {
+  const usados = new Set<string>();
+  const resumo: Linha[] = [
+    [{ value: `GymFlow - ${titulo}`, fontWeight: "bold" }],
+    [{ value: `Período: ${textoDoPeriodo(rotuloPeriodo, j)}` }],
+    [{ value: `Gerado por ${geradoPor} em ${dataHoraBr(new Date())}` }],
+  ];
+  const abas: { data: Linha[]; sheet: string; columns: { width: number }[] }[] = [
+    { data: resumo, sheet: nomeDeAba("Resumo", usados), columns: [] },
+  ];
+
+  // 1ª aba: identificação e indicadores; cada tabela vira uma aba própria
+  let secaoAtual = "Dados";
+  for (const item of doc.itens) {
+    if (item.tipo === "secao") {
+      secaoAtual = item.titulo;
+    } else if (item.tipo === "indicadores") {
+      resumo.push([null], [{ value: secaoAtual, fontWeight: "bold" }]);
+      for (const [k, v] of item.itens) resumo.push([{ value: k, fontWeight: "bold" }, celulaDoTexto(v)]);
+    } else {
+      const linhas: Linha[] = [item.cabecalho.map((h) => ({ value: h, ...CABECALHO }))];
+      if (item.linhas.length === 0) linhas.push([{ value: item.vazio }]);
+      for (const l of item.linhas) linhas.push(l.map(celulaDoTexto));
+      abas.push({ data: linhas, sheet: nomeDeAba(secaoAtual, usados), columns: larguras(linhas) });
+    }
+  }
+  abas[0].columns = larguras(resumo);
+  return writeExcelFile(abas).toBlob();
+}
+
+function receita(doc: Documento, c: Contexto, j: Janela) {
+  const ind = indicadoresDoPeriodo(c, j);
   secao(doc, "Resumo");
   indicadores(doc, [
     ["Receita no período", ind.receitaTexto],
@@ -136,7 +232,6 @@ function receita(doc: Documento, c: Contexto, dias: number) {
     ["Parcelas que venceram no período", brl(ind.inadimplencia.base)],
   ]);
 
-  const j = janela(dias);
   const pagas = c.pagamentos.filter((p) => p.pago && (pagoEmIso(p) ?? "") > j.inicio && (pagoEmIso(p) ?? "") <= j.fim);
   secao(doc, "Faturamento por plano");
   tabela(
@@ -150,8 +245,9 @@ function receita(doc: Documento, c: Contexto, dias: number) {
       .filter((l) => l[1] !== "0"),
   );
 
-  secao(doc, dias <= 7 ? "Receita por semana" : "Receita por mês");
-  tabela(doc, [dias <= 7 ? "Semana até" : "Mês", "Receita"], serieDeReceita(c.pagamentos, dias).map((s) => [s.rotulo, brl(s.valor)]));
+  const porSemana = j.dias <= 62;
+  secao(doc, porSemana ? "Receita por semana" : "Receita por mês");
+  tabela(doc, [porSemana ? "Semana até" : "Mês", "Receita"], serieNoPeriodo(c.pagamentos, j).map((s) => [s.rotulo, brl(s.valor)]));
 
   secao(doc, "Parcelas vencidas em aberto");
   tabela(
@@ -171,14 +267,14 @@ function receita(doc: Documento, c: Contexto, dias: number) {
   tabela(doc, ["Forma", "Parcelas", "Valor"], formas.filter((f) => f[1] !== "0"));
 }
 
-function frequencia(doc: Documento, c: Contexto, dias: number) {
-  const j = janela(dias);
+function frequencia(doc: Documento, c: Contexto, j: Janela) {
+  const semanas = Math.max(1, j.dias / 7);
   const feitos = checkinsNa(c.checkins, j);
   secao(doc, "Resumo");
   indicadores(doc, [
     ["Check-ins no período", String(feitos.length)],
     ["Alunos cadastrados", String(c.alunos.length)],
-    ["Média por aluno, por semana", (c.alunos.length ? feitos.length / c.alunos.length / (dias / 7) : 0).toFixed(1).replace(".", ",")],
+    ["Média por aluno, por semana", (c.alunos.length ? feitos.length / c.alunos.length / semanas : 0).toFixed(1).replace(".", ",")],
   ]);
 
   secao(doc, "Check-ins por aluno");
@@ -188,7 +284,7 @@ function frequencia(doc: Documento, c: Contexto, dias: number) {
     c.alunos.map((a) => {
       const dele = feitos.filter((x) => x.alunoId === a.id);
       const ultimo = dele.map((x) => x.data).sort().pop();
-      return [a.nome, a.instrutor || "-", String(dele.length), (dele.length / (dias / 7)).toFixed(1).replace(".", ","), ultimo ? dataBr(ultimo) : "-"];
+      return [a.nome, a.instrutor || "-", String(dele.length), (dele.length / semanas).toFixed(1).replace(".", ","), ultimo ? dataBr(ultimo) : "-"];
     }),
   );
 
@@ -211,8 +307,8 @@ function frequencia(doc: Documento, c: Contexto, dias: number) {
   tabela(doc, ["Origem", "Check-ins"], origensNa(c.checkins, j).map((o) => [o.origem, String(o.total)]));
 }
 
-function matriculas(doc: Documento, c: Contexto, dias: number) {
-  const m = matriculasNa(c.alunos, c.planos, janela(dias), c.matriculas);
+function matriculas(doc: Documento, c: Contexto, j: Janela) {
+  const m = matriculasNa(c.alunos, c.planos, j, c.matriculas);
   secao(doc, "Resumo");
   indicadores(doc, [
     ["Matrículas ativas hoje", String(m.ativas.length)],
@@ -258,8 +354,7 @@ function matriculas(doc: Documento, c: Contexto, dias: number) {
   );
 }
 
-function avaliacoes(doc: Documento, c: Contexto, dias: number) {
-  const j = janela(dias);
+function avaliacoes(doc: Documento, c: Contexto, j: Janela) {
   const doPeriodo = c.avaliacoes.filter((v) => v.data > j.inicio && v.data <= j.fim);
   secao(doc, "Resumo");
   indicadores(doc, [
@@ -307,16 +402,27 @@ function avaliacoes(doc: Documento, c: Contexto, dias: number) {
   );
 }
 
-// Monta o PDF do relatório pedido para o período escolhido.
-export function montarRelatorio(titulo: TituloRelatorio, rotuloPeriodo: string, dias: number, dados: Contexto, geradoPor: string) {
-  const doc = iniciar(titulo, rotuloPeriodo, dias, geradoPor);
-  if (titulo === "Receita e inadimplência") receita(doc, dados, dias);
-  else if (titulo === "Frequência de treino") frequencia(doc, dados, dias);
-  else if (titulo === "Matrículas") matriculas(doc, dados, dias);
-  else avaliacoes(doc, dados, dias);
-  rodape(doc.pdf);
-  return doc.pdf;
+function construir(titulo: TituloRelatorio, j: Janela, dados: Contexto): Documento {
+  const doc: Documento = { itens: [] };
+  if (titulo === "Receita e inadimplência") receita(doc, dados, j);
+  else if (titulo === "Frequência de treino") frequencia(doc, dados, j);
+  else if (titulo === "Matrículas") matriculas(doc, dados, j);
+  else avaliacoes(doc, dados, j);
+  return doc;
 }
 
-export const nomeDoArquivo = (titulo: string, dias: number) =>
-  `gymflow-${titulo.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-")}-${dias}-dias.pdf`;
+// Monta o PDF do relatório pedido para o período escolhido.
+export function montarRelatorio(titulo: TituloRelatorio, rotuloPeriodo: string, j: Janela, dados: Contexto, geradoPor: string) {
+  return desenharPdf(construir(titulo, j, dados), titulo, rotuloPeriodo, j, geradoPor);
+}
+
+// O mesmo relatório em Excel (.xlsx): uma aba de resumo e uma aba por tabela.
+export function montarExcel(titulo: TituloRelatorio, rotuloPeriodo: string, j: Janela, dados: Contexto, geradoPor: string) {
+  return desenharExcel(construir(titulo, j, dados), titulo, rotuloPeriodo, j, geradoPor);
+}
+
+export const FORMATOS = ["PDF", "Excel"] as const;
+export type FormatoRelatorio = (typeof FORMATOS)[number];
+
+export const nomeDoArquivo = (titulo: string, inicio: string, fim: string, formato: FormatoRelatorio = "PDF") =>
+  `gymflow-${titulo.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-")}-${inicio}-a-${fim}.${formato === "PDF" ? "pdf" : "xlsx"}`;

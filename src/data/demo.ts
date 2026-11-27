@@ -3,9 +3,18 @@
 import type { Checkin } from "../lib/checkins";
 import type { Matricula } from "../lib/dadosApi";
 import type { Endereco } from "../lib/endereco";
-import { HOJE_DEMO, somarDias } from "../lib/datas";
+import { dataBrParaIso, diferencaDias, HOJE_DEMO, somarDias } from "../lib/datas";
+import { formatarDataBr } from "../lib/pessoa";
 import { TREINO_DIVISOES } from "./aluno";
 import type { Aluno, Avaliacao, Divisao, Exportacao, Observacao, Pagamento, Plano, Treino, Usuario } from "./store";
+
+// Os dados abaixo foram escritos como se "hoje" fosse 14/09/2026. Para a demonstração valer em qualquer dia, todas as
+// datas são deslocadas pela diferença entre o dia real e essa base: o que estava a 3 dias de vencer continua a 3 dias.
+const BASE_DOS_DADOS = "2026-09-14";
+const DESLOCAMENTO = diferencaDias(HOJE_DEMO, BASE_DOS_DADOS);
+const iso = (d: string) => somarDias(d, DESLOCAMENTO); // AAAA-MM-DD
+const br = (d: string) => formatarDataBr(iso(dataBrParaIso(d))); // DD/MM/AAAA
+const instante = (i: string) => iso(i.slice(0, 10)) + i.slice(10); // AAAA-MM-DDTHH:MM...
 
 // Endereços de demonstração (Pau dos Ferros/RN); o CEP é o geral da cidade.
 const endDemo = (logradouro: string, numero: string, bairro: string, complemento = ""): Endereco => ({
@@ -18,7 +27,7 @@ const endDemo = (logradouro: string, numero: string, bairro: string, complemento
   uf: "RN",
 });
 
-export const ALUNOS_INICIAL: Aluno[] = [
+const ALUNOS_INICIAL_BASE: Aluno[] = [
   { id: 1, nome: "Pedro Makson", email: "pedro@email.com", tel: "(84) 99812-4477", plano: "Mensal Fit", instrutor: "Carla Menezes", fim: "02/10/2026", fin: "Pendente", ultimo: "há 1 dia", alerta: "Treino desatualizado", checkin: false, matricula: "#2026-0142", matriculaAnterior: "#2025-0388", ativo: true, endereco: endDemo("Rua das Flores", "120", "Centro", "Apto 2"), cpf: "529.982.247-25", nascimento: "2001-05-14", sexo: "Masculino" },
   { id: 2, nome: "Ana Beatriz Lima", email: "ana.lima@email.com", tel: "(84) 99123-2211", plano: "Trimestral", instrutor: "Carla Menezes", fim: "20/11/2026", fin: "Em dia", ultimo: "hoje", alerta: "", checkin: true, matricula: "#2026-0118", matriculaAnterior: "", ativo: true, endereco: endDemo("Avenida Brasil", "455", "Centro"), cpf: "390.533.447-05", nascimento: "1998-11-03", sexo: "Feminino" },
   { id: 3, nome: "Rafael Torres", email: "rafael.t@email.com", tel: "(84) 98812-0099", plano: "Mensal Fit", instrutor: "Carla Menezes", fim: "28/09/2026", fin: "Em dia", ultimo: "há 9 dias", alerta: "Sem check-in há 9 dias", checkin: false, matricula: "#2026-0091", matriculaAnterior: "", ativo: true, endereco: endDemo("Rua do Comércio", "88", "Centro"), cpf: "111.444.777-35", nascimento: "1995-07-22", sexo: "Masculino" },
@@ -27,7 +36,9 @@ export const ALUNOS_INICIAL: Aluno[] = [
   { id: 6, nome: "Luana Freire", email: "luana.f@email.com", tel: "(84) 99988-7766", plano: "Trimestral", instrutor: "Carla Menezes", fim: "02/12/2026", fin: "Em dia", ultimo: "hoje", alerta: "", checkin: true, matricula: "#2026-0126", matriculaAnterior: "", ativo: true, endereco: endDemo("Avenida Getúlio Vargas", "762", "Centro"), cpf: "246.813.579-28", nascimento: "1993-12-08", sexo: "Feminino" },
 ];
 
-export const PAGAMENTOS_INICIAL: Pagamento[] = [
+export const ALUNOS_INICIAL: Aluno[] = ALUNOS_INICIAL_BASE.map((a) => ({ ...a, fim: br(a.fim) }));
+
+const PAGAMENTOS_INICIAL_BASE: Pagamento[] = [
   { id: 1, nome: "Pedro Makson", plano: "Mensal Fit", venc: "17/09/2026", valor: "R$ 129,90", parcela: "Única", pago: false, atraso: false },
   { id: 2, nome: "Igor Bezerra", plano: "Mensal Fit", venc: "05/09/2026", valor: "R$ 129,90", parcela: "Única", pago: false, atraso: true },
   { id: 3, nome: "Rafael Torres", plano: "Mensal Fit", venc: "28/09/2026", valor: "R$ 129,90", parcela: "Única", pago: false, atraso: false },
@@ -59,6 +70,12 @@ export const PAGAMENTOS_INICIAL: Pagamento[] = [
   { id: 27, nome: "Marcela Duarte", plano: "Anual", venc: "14/02/2027", valor: "R$ 99,17", parcela: "11/12", pago: false, atraso: false },
   { id: 28, nome: "Marcela Duarte", plano: "Anual", venc: "14/03/2027", valor: "R$ 99,17", parcela: "12/12", pago: false, atraso: false },
 ];
+
+export const PAGAMENTOS_INICIAL: Pagamento[] = PAGAMENTOS_INICIAL_BASE.map((p) => ({
+  ...p,
+  venc: br(p.venc),
+  ...(p.pagoEm ? { pagoEm: br(p.pagoEm) } : {}),
+}));
 
 export const USUARIOS_INICIAL: Usuario[] = [
   { id: 1, nome: "Pedro Makson", email: "pedro@email.com", tel: "(84) 99812-4477", perfil: "Aluno", ativo: true, endereco: endDemo("Rua das Flores", "120", "Centro", "Apto 2"), cpf: "529.982.247-25", nascimento: "2001-05-14", sexo: "Masculino" },
@@ -99,7 +116,8 @@ export function gerarCheckinsDemo(): Checkin[] {
   const horas = ["07:12", "18:05", "06:48", "19:20"];
   for (const [mes, dias] of Object.entries(diasPedro)) {
     for (const dia of dias) {
-      const data = `${mes}-${pad2(dia)}`;
+      const original = `${mes}-${pad2(dia)}`;
+      const data = iso(original);
       const base = {
         alunoId: 1,
         data,
@@ -108,15 +126,15 @@ export function gerarCheckinsDemo(): Checkin[] {
         registradoPor: "Pedro Makson",
         perfilRegistro: "Aluno" as const,
       };
-      if (data === "2026-09-03") {
+      if (original === "2026-09-03") {
         adicionar({
           ...base,
           hora: "",
           origem: "Retroativo",
           motivo: "Esqueci de marcar depois do treino.",
-          registradoEm: "2026-09-04T08:10:00",
+          registradoEm: instante("2026-09-04T08:10:00"),
         });
-      } else if (data === "2026-09-09") {
+      } else if (original === "2026-09-09") {
         adicionar({
           ...base,
           hora: "07:50",
@@ -162,11 +180,11 @@ export const TREINOS_INICIAL: Treino[] = ALUNOS_INICIAL.flatMap((a) =>
     titulo: TREINO_DIVISOES[divisao].titulo,
     exercicios: TREINO_DIVISOES[divisao].exercicios,
     atualizadoPor: a.instrutor,
-    atualizadoEm: "2026-08-12T08:00:00.000Z",
+    atualizadoEm: instante("2026-08-12T08:00:00.000Z"),
   })),
 );
 
-export const AVALIACOES_INICIAL: Avaliacao[] = [
+const AVALIACOES_INICIAL_BASE: Avaliacao[] = [
   { id: 1, alunoId: 1, data: "2026-04-05", instrutor: "Diego Rocha", peso: 83.4, altura: 1.78, gordura: 23.0, cintura: 92 },
   { id: 2, alunoId: 1, data: "2026-06-10", instrutor: "Carla Menezes", peso: 81.0, altura: 1.78, gordura: 21.1, cintura: 89 },
   { id: 3, alunoId: 1, data: "2026-08-12", instrutor: "Carla Menezes", peso: 79.2, altura: 1.78, gordura: 19.4, cintura: 86, obs: "Boa adesão ao treino de membros inferiores. Ajustar carga do agachamento." },
@@ -175,22 +193,28 @@ export const AVALIACOES_INICIAL: Avaliacao[] = [
   { id: 6, alunoId: 6, data: "2026-08-05", instrutor: "Carla Menezes", peso: 58.4, altura: 1.62, gordura: 23.1, cintura: 70 },
 ];
 
-export const OBSERVACOES_INICIAL: Observacao[] = [
+export const AVALIACOES_INICIAL: Avaliacao[] = AVALIACOES_INICIAL_BASE.map((v) => ({ ...v, data: iso(v.data) }));
+
+const OBSERVACOES_INICIAL_BASE: Observacao[] = [
   { id: 1, alunoId: 1, texto: "Relatou dor leve no ombro direito no supino — reduzir carga por duas semanas.", instrutor: "Carla Menezes", criadoEm: "2026-08-12T08:40:00.000Z" },
   { id: 2, alunoId: 1, texto: "Prefere treinar cedo; ajustar volume para sessões de 50 minutos.", instrutor: "Carla Menezes", criadoEm: "2026-06-10T07:15:00.000Z" },
 ];
 
+export const OBSERVACOES_INICIAL: Observacao[] = OBSERVACOES_INICIAL_BASE.map((o) => ({ ...o, criadoEm: instante(o.criadoEm) }));
+
 // Histórico de PDFs já exportados pela administração (os próximos entram pela tela Relatórios).
-export const EXPORTACOES_INICIAL: Exportacao[] = [
-  { id: 1, relatorio: "Receita e inadimplência", periodo: "Últimos 30 dias", por: "Walber Silva", criadoEm: "2026-09-13T12:12:00.000Z" },
-  { id: 2, relatorio: "Frequência de treino", periodo: "Últimos 90 dias", por: "Walber Silva", criadoEm: "2026-09-10T20:40:00.000Z" },
+const EXPORTACOES_INICIAL_BASE: Exportacao[] = [
+  { id: 1, relatorio: "Receita e inadimplência", periodo: "Últimos 30 dias", por: "Walber Silva", formato: "PDF", criadoEm: "2026-09-13T12:12:00.000Z" },
+  { id: 2, relatorio: "Frequência de treino", periodo: "Últimos 90 dias", por: "Walber Silva", formato: "PDF", criadoEm: "2026-09-10T20:40:00.000Z" },
 ];
+
+export const EXPORTACOES_INICIAL: Exportacao[] = EXPORTACOES_INICIAL_BASE.map((e) => ({ ...e, criadoEm: instante(e.criadoEm) }));
 
 // A matrícula de cada aluno hoje, mais a anterior de quem renovou (as trocas de plano e os cancelamentos acrescentam as seguintes).
 export const MATRICULAS_INICIAL: Matricula[] = ALUNOS_INICIAL.flatMap((a) => {
   const atual: Matricula = { id: a.matricula.replace("#", ""), alunoId: a.id, plano: a.plano, fim: a.fim, matriculaAnterior: a.matriculaAnterior, situacao: "ATIVA" };
   const anterior: Matricula[] = a.matriculaAnterior
-    ? [{ id: a.matriculaAnterior.replace("#", ""), alunoId: a.id, plano: a.plano, fim: "02/09/2026", situacao: "VENCIDA" }]
+    ? [{ id: a.matriculaAnterior.replace("#", ""), alunoId: a.id, plano: a.plano, fim: br("02/09/2026"), situacao: "VENCIDA" }]
     : [];
   return [...anterior, atual];
 });
